@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="de">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Stempeluhr Tests</title>
+<style>body{font:14px/1.6 ui-monospace,Consolas,monospace;padding:16px}.ok{color:#18794E}.fail{color:#C2362B;font-weight:bold}</style></head>
+<body>
+<h1>Stempeluhr Rechen-Tests</h1>
+<div id="out"></div>
+<script src="calc.js"></script>
+<script src="test-calc.js"></script>
+<script>
+  const r = window.testResult;
+  document.getElementById("out").innerHTML = r.lines.map(l => `<div class="${l.startsWith("OK") ? "ok" : "fail"}">${l}</div>`).join("")
+    + `<p class="${r.failed ? "fail" : "ok"}">${r.failed ? r.failed + " fehlgeschlagen" : "Alle bestanden"}</p>`;
+</script>
+</body>
+</html>
