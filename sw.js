@@ -1,5 +1,5 @@
 // Offline cache. Bump VERSION whenever app files change so phones pick up the update.
-const VERSION = "stempeluhr-v2";
+const VERSION = "stempeluhr-v3";
 const FILES = ["./", "index.html", "style.css", "calc.js", "app.js", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", e => {

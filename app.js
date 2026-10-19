@@ -76,13 +76,13 @@ function renderHeute() {
     else state.days[k].end = n;
     save(); renderAll();
   };
-  // Tap Beginn / Ende to set the time by hand (native time picker).
+  // Tap Beginn / Ende to set the time by hand. The invisible time input covers the whole row,
+  // so the tap lands on it directly and the phone opens its own time picker.
   el.querySelectorAll(".row.tap").forEach(row => {
     const inp = row.querySelector("input");
-    row.onclick = () => {
-      pickerOpenUntil = Date.now() + 120000;
-      try { inp.showPicker(); } catch (e) { inp.focus(); inp.click(); }
-    };
+    inp.onpointerdown = inp.onfocus = () => { pickerOpenUntil = Date.now() + 120000; };
+    // Desktop browsers don't open the picker on a plain click; touch phones do it themselves.
+    inp.onclick = () => { if (matchMedia("(pointer: fine)").matches) try { inp.showPicker(); } catch (e) { /* not supported */ } };
     inp.onblur = () => { pickerOpenUntil = 0; };
     inp.onchange = () => { pickerOpenUntil = 0; setTodayTime(row.dataset.time, inp.value); };
   });
@@ -294,4 +294,12 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden && ca
 renderAll();
 
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
+if ("serviceWorker" in navigator) {
+  // When a new version takes over, reload once so the phone shows it right away.
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (hadController && !reloaded && canRefresh()) { reloaded = true; location.reload(); }
+  });
+  navigator.serviceWorker.register("sw.js").then(r => r.update()).catch(() => {});
+}
