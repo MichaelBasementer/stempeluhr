@@ -59,8 +59,8 @@ function renderHeute() {
       <div class="state">${running ? `<span class="dot"></span>Eingecheckt seit ${d.start}` : done ? "Ausgecheckt" : off ? TYPES[d.type] : "Noch nicht eingecheckt"}</div></div>
     ${button}
     ${off ? "" : `<div class="panel">
-      <div class="row"><span>Beginn</span><span class="num">${d && d.start || "–"}</span></div>
-      <div class="row"><span>Ende</span><span class="num">${done ? d.end : running ? "läuft" : "–"}</span></div>
+      <div class="row tap" data-time="start"><span>Beginn</span><span class="num tapval">${d && d.start || "eintragen"}</span><input type="time" tabindex="-1" aria-label="Beginn" value="${d && d.start || ""}"></div>
+      <div class="row ${d && d.start ? "tap" : ""}" data-time="end"><span>Ende</span><span class="num ${d && d.start ? "tapval" : ""}">${done ? d.end : running ? "läuft" : "–"}</span><input type="time" tabindex="-1" aria-label="Ende" value="${done ? d.end : ""}" ${d && d.start ? "" : "disabled"}></div>
       <div class="row"><span>Pause</span><span class="num">${pause} min<span class="hint">${d && d.pause > C.legalPause(present) ? "von Hand" : pause ? "automatisch, § 4 ArbZG" : "ab 6 h Anwesenheit"}</span></span></div>
       <div class="row total"><span>Arbeitszeit</span><span class="num">${C.fmt(present - pause)}</span></div>
     </div>`}
@@ -76,9 +76,36 @@ function renderHeute() {
     else state.days[k].end = n;
     save(); renderAll();
   };
+  // Tap Beginn / Ende to set the time by hand (native time picker).
+  el.querySelectorAll(".row.tap").forEach(row => {
+    const inp = row.querySelector("input");
+    row.onclick = () => {
+      pickerOpenUntil = Date.now() + 120000;
+      try { inp.showPicker(); } catch (e) { inp.focus(); inp.click(); }
+    };
+    inp.onblur = () => { pickerOpenUntil = 0; };
+    inp.onchange = () => { pickerOpenUntil = 0; setTodayTime(row.dataset.time, inp.value); };
+  });
   const u = document.getElementById("undo");
   if (u) u.onclick = () => { state.days[todayKey()].end = null; save(); renderAll(); };
   el.querySelectorAll("[data-open]").forEach(b => b.onclick = () => openDay(b.dataset.open));
+}
+
+let pickerOpenUntil = 0;
+function setTodayTime(field, v) {
+  const k = todayKey(), d = state.days[k];
+  if (field === "start") {
+    if (!v) { if (d && !d.end) delete state.days[k]; }          // cleared before check-out → no entry
+    else if (!d) state.days[k] = { type: "arbeit", start: v, end: null };
+    else if (d.end && C.toMin(v) >= C.toMin(d.end)) { toast("Der Beginn muss vor dem Ende liegen."); return renderAll(); }
+    else d.start = v;
+  } else {
+    if (!d || !d.start) return renderAll();
+    if (!v) d.end = null;                                         // cleared → back to "läuft"
+    else if (C.toMin(v) <= C.toMin(d.start)) { toast("Das Ende muss nach dem Beginn liegen."); return renderAll(); }
+    else d.end = v;
+  }
+  save(); renderAll();
 }
 
 // ---------- Kalender ----------
@@ -260,8 +287,10 @@ function renderAll() {
 document.querySelectorAll("[data-go]").forEach(b => b.onclick = () => go(b.dataset.go));
 document.getElementById("gear").onclick = openSettings;
 // Refresh the live clock unless a sheet is open (it would wipe unsaved input).
-setInterval(() => { if (!document.getElementById("sheetHost").innerHTML) renderAll(); }, 20000);
-document.addEventListener("visibilitychange", () => { if (!document.hidden && !document.getElementById("sheetHost").innerHTML) renderAll(); });
+// Also skip while a time picker is open, or the re-render would drop the picked value.
+const canRefresh = () => !document.getElementById("sheetHost").innerHTML && Date.now() > pickerOpenUntil;
+setInterval(() => { if (canRefresh()) renderAll(); }, 20000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden && canRefresh()) renderAll(); });
 renderAll();
 
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist();

@@ -1,5 +1,5 @@
 // Offline cache. Bump VERSION whenever app files change so phones pick up the update.
-const VERSION = "stempeluhr-v1";
+const VERSION = "stempeluhr-v2";
 const FILES = ["./", "index.html", "style.css", "calc.js", "app.js", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", e => {
@@ -12,15 +12,15 @@ self.addEventListener("activate", e => {
     .then(() => self.clients.claim()));
 });
 
-// App files: cache first. Google Fonts: cached on first use so they work offline too.
+// Network first (so updates show up on the next start), cache as the offline fallback.
+// Google Fonts are cached on first use so they work offline too.
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
-  e.respondWith(caches.match(e.request, { ignoreSearch: true }).then(hit => hit || fetch(e.request).then(res => {
-    const url = new URL(e.request.url);
-    if (url.origin === location.origin || url.hostname.endsWith("fonts.googleapis.com") || url.hostname.endsWith("fonts.gstatic.com")) {
-      const copy = res.clone();
-      caches.open(VERSION).then(c => c.put(e.request, copy));
-    }
+  const url = new URL(e.request.url);
+  const cacheable = url.origin === location.origin || url.hostname.endsWith("fonts.googleapis.com") || url.hostname.endsWith("fonts.gstatic.com");
+  if (!cacheable) return;
+  e.respondWith(fetch(e.request).then(res => {
+    if (res.ok || res.type === "opaque") { const copy = res.clone(); caches.open(VERSION).then(c => c.put(e.request, copy)); }
     return res;
-  })));
+  }).catch(() => caches.match(e.request, { ignoreSearch: true })));
 });
