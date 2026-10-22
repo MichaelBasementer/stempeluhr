@@ -45,7 +45,7 @@ function renderHeute() {
   const present = d && !off && d.start ? Math.max(0, C.toMin(end) - C.toMin(d.start)) : 0;
   const pause = d && !off && d.start ? C.effectivePause(present, d.pause) : 0;
   const wk = C.weekIst(state.days, C.mondayOf(t), S, t, now);
-  const target = S.weeklyH * 60, cap = target * (1 + S.coveredPct / 100);
+  const target = C.weekTarget(C.mondayOf(t), Object.keys(state.days).sort()[0], S), cap = target * (1 + S.coveredPct / 100);
   const lost = forgottenDay();
 
   let button;
@@ -66,7 +66,7 @@ function renderHeute() {
     </div>`}
     <div class="week">
       <div class="lbl"><span>Diese Woche (KW ${C.isoWeek(t)})</span><span class="num">${C.fmt(wk)} / ${C.fmt(target)}</span></div>
-      <div class="bar"><i style="width:${Math.min(100, wk / cap * 100)}%"></i><b style="left:${target / cap * 100}%"></b></div>
+      <div class="bar"><i style="width:${cap ? Math.min(100, wk / cap * 100) : 100}%"></i><b style="left:${cap ? target / cap * 100 : 0}%"></b></div>
     </div>`;
 
   const st = document.getElementById("stamp");
@@ -145,10 +145,10 @@ function renderUeber() {
   const target = S.weeklyH * 60, cap = target * (1 + S.coveredPct / 100);
   el.innerHTML = `
     <div class="saldo"><div class="v ${cls(bal)}">${C.fmtSigned(bal)}</div><div class="cap">Überstunden-Saldo (Std:Min)</div></div>
-    <p class="rule">Soll ${C.fmt(target)} pro Woche. Bis ${C.fmt(cap)} (+${S.coveredPct} %) ist mit dem Gehalt abgegolten, nur darüber zählt als Überstunden. Unter ${C.fmt(target)} zählt als Minusstunden. Die laufende Woche zählt erst, wenn sie vorbei ist.</p>
+    <p class="rule">Soll ${C.fmt(target)} pro Woche. Bis ${C.fmt(cap)} (+${S.coveredPct} %) ist mit dem Gehalt abgegolten, nur darüber zählt als Überstunden. Unter ${C.fmt(target)} zählt als Minusstunden. Die laufende Woche zählt erst, wenn sie vorbei ist. In der Woche deines ersten Eintrags zählen nur die Werktage ab diesem Tag.</p>
     ${ws.length ? `<div class="panel">${ws.slice().reverse().map(w => `
       <div class="wk"><span class="k">KW ${w.kw}${w.delta === null ? '<span class="pill">läuft</span>' : ""}</span>
-        <span class="d">ab ${dateDE(w.monday).slice(0, 6)} · Ist <span class="num">${C.fmt(w.ist)}</span></span>
+        <span class="d">ab ${dateDE(w.monday).slice(0, 6)}${w.target !== target ? ` · Soll <span class="num">${C.fmt(w.target)}</span>` : ""} · Ist <span class="num">${C.fmt(w.ist)}</span></span>
         <span class="x ${w.delta === null ? "zero" : cls(w.delta)}">${w.delta === null ? "–" : C.fmtSigned(w.delta)}</span></div>`).join("")}
     </div>` : `<p class="empty-state">Noch keine Einträge. Checke im Tab „Heute“ ein, dann erscheinen hier deine Wochen.</p>`}`;
 }
@@ -209,7 +209,7 @@ function openSettings() {
     <div class="panel">
       <div class="row set-row"><span>Soll pro Woche (h)</span><input id="s-weeklyH" value="${S.weeklyH}" inputmode="decimal"></div>
       <div class="row set-row"><span>Mit Gehalt abgegolten (%)</span><input id="s-coveredPct" value="${S.coveredPct}" inputmode="decimal"></div>
-      <div class="row set-row"><span>Urlaub/Krank/Feiertag (h)</span><input id="s-offDayH" value="${S.offDayH}" inputmode="decimal"></div>
+      <div class="row set-row"><span>Stunden pro Arbeitstag<small style="display:block;font-size:12px">auch für Urlaub/Krank/Feiertag</small></span><input id="s-offDayH" value="${S.offDayH}" inputmode="decimal"></div>
     </div>
     <div class="actions"><button class="primary" id="csv">CSV exportieren</button></div>
     <div class="actions"><button id="backup">Backup speichern</button><button id="restore">Backup laden</button></div>

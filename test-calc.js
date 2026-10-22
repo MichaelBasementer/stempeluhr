@@ -37,6 +37,21 @@ cases.push(["Anzahl Wochen", ws.length, 3]);
 cases.push(["Saldo +2:48 −2:30 = +0:18 (laufende Woche zählt nicht)", C.balance(ws), 18]);
 cases.push(["Laufende Woche ohne Delta", ws[2].delta, null]);
 
+// Start week shortened: first entry Do 01.10.2026 → Do+Fr = 16:00 target, buffer 10 % → 17:36.
+const T16 = C.weekTarget("2026-09-28", "2026-10-01", S);
+cases.push(["Start Do → Soll 16:00", T16, 960]);
+cases.push(["Start Di → Soll 32:00", C.weekTarget("2026-09-28", "2026-09-29", S), 1920]);
+cases.push(["Start Sa → Soll 0", C.weekTarget("2026-09-28", "2026-10-03", S), 0]);
+cases.push(["Woche nach Start → Soll 32:00", C.weekTarget("2026-10-05", "2026-10-01", S), 1920]);
+cases.push(["Startwoche 16:00 gearbeitet → 0", C.weekDelta(960, S, T16), 0]);
+cases.push(["Startwoche 17:36 gearbeitet → 0", C.weekDelta(1056, S, T16), 0]);
+cases.push(["Startwoche 18:00 gearbeitet → +0:24", C.weekDelta(1080, S, T16), 24]);
+cases.push(["Startwoche 12:00 gearbeitet → −4:00", C.weekDelta(720, S, T16), -240]);
+const start = { "2026-10-01": W("07:30", "16:00"), "2026-10-02": W("07:30", "16:00") };
+const ws2 = C.weeks(start, S, "2026-10-22", "12:00");
+cases.push(["Beispiel Do+Fr je 8 h: KW 40 Delta 0", ws2[0].delta, 0]);
+cases.push(["Beispiel: KW 41 (leer) zählt −32:00", ws2[1].delta, -1920]);
+
 let failed = 0;
 const lines = cases.map(([name, got, want]) => {
   const ok = got === want; if (!ok) failed++;

@@ -29,8 +29,9 @@
   }
 
   // Under target → minus; target..target+covered% → 0; above → only the excess over that.
-  function weekDelta(istMin, settings) {
-    const target = settings.weeklyH * 60;
+  // targetMin is the week's target (shortened in the start week), default the weekly target.
+  function weekDelta(istMin, settings, targetMin) {
+    const target = targetMin ?? settings.weeklyH * 60;
     const cap = target * (1 + settings.coveredPct / 100);
     if (istMin < target) return istMin - target;
     if (istMin <= cap) return 0;
@@ -47,6 +48,16 @@
     const thu = new Date(d); thu.setUTCDate(d.getUTCDate() + 3 - ((d.getUTCDay() + 6) % 7));
     const jan4 = new Date(Date.UTC(thu.getUTCFullYear(), 0, 4, 12));
     return 1 + Math.round(((thu - jan4) / 864e5 - 3 + ((jan4.getUTCDay() + 6) % 7)) / 7);
+  }
+
+  // The week of the first entry only owes the weekdays Mo–Fr from that entry on × hours per day,
+  // capped at the weekly target. Every other week owes the full weekly target.
+  function weekTarget(monday, firstKey, settings) {
+    const full = settings.weeklyH * 60;
+    if (!firstKey || mondayOf(firstKey) !== monday) return full;
+    let days = 0;
+    for (let i = 0; i < 5; i++) if (addDays(monday, i) >= firstKey) days++;
+    return Math.min(full, days * settings.offDayH * 60);
   }
 
   function weekIst(days, monday, settings, todayKey, nowHHMM) {
@@ -67,7 +78,8 @@
     const out = [];
     for (let m = mondayOf(keys[0]); m <= cur; m = addDays(m, 7)) {
       const ist = weekIst(days, m, settings, todayKey, nowHHMM);
-      out.push({ monday: m, kw: isoWeek(m), ist, delta: m === cur ? null : weekDelta(ist, settings) });
+      const target = weekTarget(m, keys[0], settings);
+      out.push({ monday: m, kw: isoWeek(m), ist, target, delta: m === cur ? null : weekDelta(ist, settings, target) });
     }
     return out;
   }
@@ -75,7 +87,7 @@
   const balance = ws => ws.reduce((a, w) => a + (w.delta ?? 0), 0);
 
   const api = { DEFAULTS, toMin, fmt, fmtSigned, legalPause, effectivePause, netMinutes, weekDelta,
-    D, key, addDays, mondayOf, isoWeek, weekIst, weeks, balance };
+    D, key, addDays, mondayOf, isoWeek, weekTarget, weekIst, weeks, balance };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.Calc = api;
 })(this);
