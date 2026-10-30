@@ -2,6 +2,7 @@
 const C = window.Calc;
 const STORE = "zeit.v1";
 const TYPES = { arbeit: "Arbeit", urlaub: "Urlaub", krank: "Krank", feiertag: "Feiertag", abbau: "Abbau" };
+const WARN = "\u26A0\uFE0E";
 const DOW = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 const DOW_LONG = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
 const MON = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
@@ -64,6 +65,7 @@ function renderHeute() {
   el.innerHTML = `
     ${lost ? `<div class="warn"><span>${DOW[C.D(lost).getUTCDay()]}, ${dateDE(lost)}: nicht ausgecheckt</span><button data-open="${lost}">Ende nachtragen</button></div>` : ""}
     ${C.backupDue(state.lastBackup, ctx.firstKey, t) ? `<div class="warn"><span>${state.lastBackup ? "Dein letztes Backup ist über 7 Tage her." : "Du hast noch kein Backup gespeichert."}</span><button id="backupNow">Backup speichern</button></div>` : ""}
+    ${C.warnings(t, state.days, S, now).map(w => `<div class="warn"><span>${WARN} ${w}</span></div>`).join("")}
     <div class="clock"><div class="now">${now}</div>
       <div class="state">${running ? `<span class="dot"></span>Eingecheckt seit ${d.start}` : done ? "Ausgecheckt" : off ? TYPES[d.type] : "Noch nicht eingecheckt"}${hol ? ` · ${hol.name}` : ""}</div></div>
     ${button}
@@ -135,7 +137,8 @@ function renderKalender() {
     let sub = "";
     if (hol) sub = hol.short;
     else if (d) sub = d.type !== "arbeit" ? TYPES[d.type] : d.end ? C.fmt(net) : "offen";
-    cells += `<button data-day="${k}" class="${dow > 4 ? "we" : ""} ${k === t ? "today" : ""} ${hol || (d && d.type !== "arbeit") ? "off" : ""}" aria-label="${i}. ${MON[m]}${hol ? ", " + hol.name : ""}"><span>${i}</span><small>${sub || "&nbsp;"}</small></button>`;
+    const warned = C.warnings(k, state.days, S, k === t ? nowHHMM() : null).length > 0;
+    cells += `<button data-day="${k}" class="${dow > 4 ? "we" : ""} ${k === t ? "today" : ""} ${hol || (d && d.type !== "arbeit") ? "off" : ""}" aria-label="${i}. ${MON[m]}${hol ? ", " + hol.name : ""}${warned ? ", Warnung" : ""}">${warned ? `<i class="wmark" aria-hidden="true">${WARN}</i>` : ""}<span>${i}</span><small>${sub || "&nbsp;"}</small></button>`;
   }
   el.innerHTML = `
     <div class="monthbar"><button class="icon-btn" id="prev" aria-label="Vorheriger Monat">‹</button><h2>${MON[m]} ${y}</h2><button class="icon-btn" id="next" aria-label="Nächster Monat">›</button></div>
@@ -239,6 +242,7 @@ function openDay(k) {
       : d.type === "abbau" ? `<div class="fields"><label class="full">Stunden abbauen<input id="f-hours" inputmode="decimal" value="${String(d.hours ?? S.offDayH).replace(".", ",")}"></label></div>
       <div class="result"><span>Geht vom Saldo ab</span><b>${hol && C.isWeekday(k) ? "0:00" : C.fmt(-(d.hours ?? S.offDayH) * 60)}</b></div>`
       : `<div class="result"><span>Zählt als</span><b>${C.fmt(S.offDayH * 60)}</b></div>`}
+      ${C.warnings(k, { ...state.days, [k]: d }, S).map(w => `<p class="holiday-note">${WARN} ${w}</p>`).join("")}
       ${error ? `<p class="error">${error}</p>` : ""}
       <div class="actions"><button class="danger" id="del">Löschen</button><button id="cancel">Abbrechen</button><button class="primary" id="save">Speichern</button></div>
     </div></div>`;

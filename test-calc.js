@@ -103,6 +103,14 @@ const vDays = { "2026-08-03": { type: "urlaub" }, "2026-08-04": { type: "urlaub"
 cases.push(["Urlaubskonto 2026", JSON.stringify(C.vacationSummary(vDays, 2026, vS, "2026-10-31")), '{"total":31,"used":2,"planned":1,"left":28}']);
 cases.push(["Urlaubskonto 2027 ohne Rest", C.vacationSummary(vDays, 2027, vS, "2026-10-31").total, 28]);
 
+// Working-time warnings: Di 11:00 netto, Mi nur 9 h Ruhe nach 20:00 Ende.
+const wDays = { "2026-10-06": W("08:00", "20:00"), "2026-10-07": W("05:00", "13:00"), "2026-10-08": W("07:30", "16:00") };
+cases.push(["Warnung über 10 h", C.warnings("2026-10-06", wDays, S)[0], "Über 10 h Arbeitszeit (11:15)"]);
+cases.push(["Warnung Ruhezeit", C.warnings("2026-10-07", wDays, S)[0], "Nur 9:00 h Ruhezeit seit gestern (mind. 11 h)"]);
+cases.push(["Keine Warnung bei normalem Tag", C.warnings("2026-10-08", wDays, S).length, 0]);
+cases.push(["Laufender Tag wird mit Uhrzeit geprüft", C.warnings("2026-10-09", { "2026-10-09": W("07:00", null) }, S, "18:00").length, 1]);
+cases.push(["Warnung ändert Netto nicht", C.netMinutes(wDays["2026-10-06"], S), 675]);
+
 let failed = 0;
 const lines = cases.map(([name, got, want]) => {
   const ok = got === want; if (!ok) failed++;

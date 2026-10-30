@@ -149,6 +149,20 @@
     return { total, used, planned, left: total - used - planned };
   }
 
+  // ArbZG hints only: over 10 h in a day, under 11 h rest. Nothing is calculated from these.
+  function warnings(k, days, settings, now) {
+    const d = days[k], out = [];
+    if (!d || d.type !== "arbeit" || !d.start) return out;
+    const net = netMinutes(d, settings, now || null);
+    if (net > 600) out.push(`Über 10 h Arbeitszeit (${fmt(net)})`);
+    const p = days[addDays(k, -1)];
+    if (p && p.type === "arbeit" && p.end) {
+      const rest = 1440 - toMin(p.end) + toMin(d.start);
+      if (rest < 660) out.push(`Nur ${fmt(rest)} h Ruhezeit seit gestern (mind. 11 h)`);
+    }
+    return out;
+  }
+
   // One row per day in [from, to] for the CSV and the PDF, including automatic holidays.
   function dayRows(days, settings, from, to, todayKey) {
     const ctx = { firstKey: firstEntry(days), todayKey, now: null }, out = [];
@@ -193,7 +207,7 @@
   }
 
   const api = { DEFAULTS, LANDS, easter, holidays, holidayOn, holidayCounts, firstEntry, isWeekday, dayMinutes, dayRows, toMin, fmt, fmtSigned, legalPause, effectivePause, netMinutes, weekDelta,
-    D, key, addDays, mondayOf, isoWeek, weekTarget, weekAbbau, vacationSummary, weekIst, weeks, balance, backupDue };
+    D, key, addDays, mondayOf, isoWeek, weekTarget, weekAbbau, vacationSummary, warnings, weekIst, weeks, balance, backupDue };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.Calc = api;
 })(this);
