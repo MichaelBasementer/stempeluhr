@@ -152,6 +152,79 @@ function renderKalender() {
 }
 
 // ---------- Überstunden ----------
+let ueberView = "wochen", viewYear = +todayKey().slice(0, 4);
+
+// Single series: balance at each month end. The month list below is the table view of the same data.
+function balanceChart(months) {
+  const W = 340, H = 170, L = 40, R = 14, T = 12, B = 24;
+  const active = months.filter(m => m.active), vals = [0, ...active.map(m => m.balance)];
+  const min = Math.min(...vals), max = Math.max(...vals), range = Math.max(max - min, 60);
+  const step = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000].map(h => h * 60).find(s => Math.ceil(range / s) <= 4) || 120000;
+  const lo = Math.floor(min / step) * step, hi = Math.max(Math.ceil(max / step) * step, lo + step);
+  const x = m => L + m * (W - L - R) / 11, y = v => T + (hi - v) * (H - T - B) / (hi - lo);
+  let grid = "";
+  for (let v = lo; v <= hi; v += step) {
+    const label = (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v / 60);
+    grid += `<line class="${v === 0 ? "zero" : "grid"}" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"></line><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${label} h</text>`;
+  }
+  const path = active.map((m, i) => `${i ? "L" : "M"}${x(m.month).toFixed(1)} ${y(m.balance).toFixed(1)}`).join(" ");
+  const last = active[active.length - 1];
+  const hits = active.map(m => `<rect class="hit" data-m="${m.month}" x="${x(m.month) - (W - L - R) / 22}" y="0" width="${(W - L - R) / 11}" height="${H}"></rect>`).join("");
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Überstunden-Saldo am Monatsende">
+    ${grid}
+    ${"JFMAMJJASOND".split("").map((c, i) => `<text x="${x(i)}" y="${H - 6}" text-anchor="middle">${c}</text>`).join("")}
+    <path class="line" d="${path}"></path>
+    <line class="cross" id="yr-cross" x1="${x(last.month)}" x2="${x(last.month)}" y1="${T}" y2="${H - B}"></line>
+    <circle class="dot" id="yr-dot" r="4" cx="${x(last.month)}" cy="${y(last.balance)}"></circle>
+    ${hits}
+  </svg>`;
+}
+
+function yearHtml(cls) {
+  const S = state.settings, t = todayKey();
+  const months = C.yearOverview(state.days, state.corrections, S, viewYear, t, nowHHMM());
+  const active = months.filter(m => m.active), last = active[active.length - 1];
+  const vac = C.vacationSummary(state.days, viewYear, S, t);
+  return `
+    <div class="monthbar"><button class="icon-btn" id="yprev" aria-label="Vorheriges Jahr">‹</button><h2>${viewYear}</h2><button class="icon-btn" id="ynext" aria-label="Nächstes Jahr">›</button></div>
+    ${active.length ? `<div class="panel">
+      <p class="tip" id="yr-tip">${MON[last.month]}: Saldo <span class="num">${C.fmtSigned(last.balance)}</span></p>
+      ${balanceChart(months)}
+    </div>
+    <div class="panel">${active.slice().reverse().map(m => `
+      <div class="wk"><span class="k">${MON_SHORT[m.month]}</span><span class="d">Ist <span class="num">${C.fmt(m.ist)}</span></span>
+        <span class="x ${cls(m.overtime)}">${C.fmtSigned(m.overtime)}</span></div>`).join("")}</div>
+    <p class="rule">Plus/Minus pro Monat inklusive Korrekturen. Eine Woche über zwei Monate zählt ganz zu dem Monat, in dem ihr Donnerstag liegt.</p>`
+    : `<p class="empty-state">Für ${viewYear} gibt es keine Einträge.</p>`}
+    <div class="panel">
+      <div class="row"><span>Urlaub ${viewYear}</span><span class="num">${vac.total} Tage</span></div>
+      <div class="row"><span>Genommen</span><span class="num">${vac.used}</span></div>
+      <div class="row"><span>Geplant</span><span class="num">${vac.planned}</span></div>
+      <div class="row total"><span>Übrig</span><span class="num">${vac.left}</span></div>
+    </div>
+    ${vac.total ? "" : `<p class="rule">Trage deine Urlaubstage in den Einstellungen ein (Zahnrad oben rechts).</p>`}`;
+}
+
+function bindYear() {
+  const prev = document.getElementById("yprev");
+  if (!prev) return;
+  prev.onclick = () => { viewYear--; renderUeber(); };
+  document.getElementById("ynext").onclick = () => { viewYear++; renderUeber(); };
+  const svg = document.querySelector(".chart");
+  if (!svg) return;
+  const months = C.yearOverview(state.days, state.corrections, state.settings, viewYear, todayKey(), nowHHMM());
+  const show = r => {
+    const m = months[+r.dataset.m], cx = +r.getAttribute("x") + +r.getAttribute("width") / 2;
+    const path = svg.querySelector(".line"), dot = document.getElementById("yr-dot"), cross = document.getElementById("yr-cross");
+    const pts = path.getAttribute("d").split(/[ML]/).filter(Boolean).map(p => p.trim().split(" ").map(Number));
+    const pt = pts.find(p => Math.abs(p[0] - cx) < 1);
+    dot.setAttribute("cx", pt[0]); dot.setAttribute("cy", pt[1]);
+    cross.setAttribute("x1", pt[0]); cross.setAttribute("x2", pt[0]);
+    document.getElementById("yr-tip").innerHTML = `${MON[m.month]}: Saldo <span class="num">${C.fmtSigned(m.balance)}</span>`;
+  };
+  svg.querySelectorAll(".hit").forEach(r => { r.onclick = () => show(r); r.onpointerenter = () => show(r); });
+}
+
 function renderUeber() {
   const el = document.getElementById("t-ueber"), S = state.settings;
   const ws = C.weeks(state.days, S, todayKey(), nowHHMM());
@@ -160,7 +233,8 @@ function renderUeber() {
   const target = S.weeklyH * 60, cap = target * (1 + S.coveredPct / 100);
   el.innerHTML = `
     <div class="saldo"><div class="v ${cls(bal)}">${C.fmtSigned(bal)}</div><div class="cap">Überstunden-Saldo (Std:Min)</div></div>
-    <p class="rule">Soll ${C.fmt(target)} pro Woche. Bis ${C.fmt(cap)} (+${S.coveredPct} %) ist mit dem Gehalt abgegolten, nur darüber zählt als Überstunden. Unter ${C.fmt(target)} zählt als Minusstunden. Die laufende Woche zählt erst, wenn sie vorbei ist. In der Woche deines ersten Eintrags zählen nur die Werktage ab diesem Tag. Feiertage von Mo–Fr zählen automatisch.</p>
+    <div class="seg two"><button data-v="wochen" aria-pressed="${ueberView === "wochen"}">Wochen</button><button data-v="jahr" aria-pressed="${ueberView === "jahr"}">Jahr</button></div>
+    ${ueberView === "jahr" ? yearHtml(cls) : `<p class="rule">Soll ${C.fmt(target)} pro Woche. Bis ${C.fmt(cap)} (+${S.coveredPct} %) ist mit dem Gehalt abgegolten, nur darüber zählt als Überstunden. Unter ${C.fmt(target)} zählt als Minusstunden. Die laufende Woche zählt erst, wenn sie vorbei ist. In der Woche deines ersten Eintrags zählen nur die Werktage ab diesem Tag. Feiertage von Mo–Fr zählen automatisch.</p>
     <div class="actions"><button id="addCorr">Korrektur eintragen</button></div>
     ${state.corrections.length ? `<div class="panel">${state.corrections.slice().sort((a, b) => b.date.localeCompare(a.date)).map(c => `
       <div class="wk corr" role="button" tabindex="0" data-corr="${esc(c.id)}"><span class="k">Korrektur</span>
@@ -170,8 +244,11 @@ function renderUeber() {
       <div class="wk"><span class="k">KW ${w.kw}${w.delta === null ? '<span class="pill">läuft</span>' : ""}</span>
         <span class="d">ab ${dateDE(w.monday).slice(0, 6)}${w.target !== target ? ` · Soll <span class="num">${C.fmt(w.target)}</span>` : ""} · Ist <span class="num">${C.fmt(w.ist)}</span>${w.abbau ? ` · Abbau <span class="num">${C.fmt(w.abbau)}</span>` : ""}</span>
         <span class="x ${w.delta === null ? "zero" : cls(w.delta)}">${w.delta === null ? "–" : C.fmtSigned(w.delta)}</span></div>`).join("")}
-    </div>` : `<p class="empty-state">Noch keine Einträge. Checke im Tab „Heute“ ein, dann erscheinen hier deine Wochen.</p>`}`;
-  document.getElementById("addCorr").onclick = () => openCorrection(null);
+    </div>` : `<p class="empty-state">Noch keine Einträge. Checke im Tab „Heute“ ein, dann erscheinen hier deine Wochen.</p>`}`}`;
+  el.querySelectorAll("[data-v]").forEach(b => b.onclick = () => { ueberView = b.dataset.v; renderUeber(); });
+  bindYear();
+  const add = document.getElementById("addCorr");
+  if (add) add.onclick = () => openCorrection(null);
   el.querySelectorAll("[data-corr]").forEach(r => {
     r.onclick = () => openCorrection(r.dataset.corr);
     r.onkeydown = ev => { if (ev.key === "Enter") openCorrection(r.dataset.corr); };
@@ -366,6 +443,7 @@ function toast(t) {
 }
 
 // ---------- tabs + lifecycle ----------
+const MON_SHORT = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
 const TITLES = { heute: "Heute", kalender: "Kalender", ueber: "Überstunden" };
 function go(tab) {
   document.querySelectorAll("section[data-tab]").forEach(s => s.hidden = s.dataset.tab !== tab);

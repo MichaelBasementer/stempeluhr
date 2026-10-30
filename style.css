@@ -76,6 +76,16 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline
 .wk{display:grid;grid-template-columns:auto 1fr auto;gap:4px 12px;align-items:baseline;padding-block:12px;border-bottom:1px solid var(--line)}
 .wk:last-child{border-bottom:0}
 .wk.corr{cursor:pointer}
+.tip{margin:0;padding-block:12px 4px;font-size:14px;color:var(--muted)}
+.tip .num{color:var(--ink);font-weight:600}
+.chart{display:block;width:100%;height:auto;margin-bottom:8px;touch-action:pan-y}
+.chart text{fill:var(--muted);font:11px var(--sans)}
+.chart .grid{stroke:var(--line);stroke-width:1}
+.chart .zero{stroke:var(--muted);stroke-width:1}
+.chart .line{fill:none;stroke:var(--accent);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.chart .cross{stroke:var(--muted);stroke-width:1;stroke-dasharray:3 3}
+.chart .dot{fill:var(--accent);stroke:var(--surface);stroke-width:2}
+.chart .hit{fill:transparent;cursor:pointer}
 .wk .k{font-weight:600}
 .wk .d{color:var(--muted);font-size:13px}
 .wk .x{font-family:var(--mono);font-weight:600}

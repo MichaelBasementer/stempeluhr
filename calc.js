@@ -206,8 +206,31 @@
     return !!ref && (D(todayKey) - D(ref)) / 864e5 >= n;
   }
 
+  // One entry per month. A finished week stays whole: its overtime goes to the month of its
+  // Thursday. Corrections go to the month of their date. balance is the running total at month end.
+  function yearOverview(days, corrections, settings, year, todayKey, now) {
+    const ws = weeks(days, settings, todayKey, now), ctx = { firstKey: firstEntry(days), todayKey, now };
+    const first = [ctx.firstKey, ...corrections.map(c => c.date)].filter(Boolean).sort()[0] || null;
+    const jan1 = `${year}-01-01`, thu = w => addDays(w.monday, 3);
+    let running = ws.filter(w => w.delta !== null && thu(w) < jan1).reduce((a, w) => a + w.delta, 0)
+      + corrections.filter(c => c.date < jan1).reduce((a, c) => a + c.min, 0);
+    const months = [];
+    for (let m = 0; m < 12; m++) {
+      const from = `${year}-${String(m + 1).padStart(2, "0")}-01`, to = key(new Date(Date.UTC(year, m + 1, 0, 12)));
+      let ist = 0;
+      for (let k = from; k <= to; k = addDays(k, 1)) ist += dayMinutes(k, days[k], settings, ctx);
+      const inMonth = x => x >= from && x <= to;
+      const overtime = ws.filter(w => w.delta !== null && inMonth(thu(w))).reduce((a, w) => a + w.delta, 0)
+        + corrections.filter(c => inMonth(c.date)).reduce((a, c) => a + c.min, 0);
+      running += overtime;
+      const active = !!first && to >= first && from <= todayKey;
+      months.push({ month: m, ist, overtime, active, balance: active ? running : null });
+    }
+    return months;
+  }
+
   const api = { DEFAULTS, LANDS, easter, holidays, holidayOn, holidayCounts, firstEntry, isWeekday, dayMinutes, dayRows, toMin, fmt, fmtSigned, legalPause, effectivePause, netMinutes, weekDelta,
-    D, key, addDays, mondayOf, isoWeek, weekTarget, weekAbbau, vacationSummary, warnings, weekIst, weeks, balance, backupDue };
+    D, key, addDays, mondayOf, isoWeek, weekTarget, weekAbbau, vacationSummary, warnings, yearOverview, weekIst, weeks, balance, backupDue };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.Calc = api;
 })(this);

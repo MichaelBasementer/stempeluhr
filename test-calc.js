@@ -111,6 +111,18 @@ cases.push(["Keine Warnung bei normalem Tag", C.warnings("2026-10-08", wDays, S)
 cases.push(["Laufender Tag wird mit Uhrzeit geprüft", C.warnings("2026-10-09", { "2026-10-09": W("07:00", null) }, S, "18:00").length, 1]);
 cases.push(["Warnung ändert Netto nicht", C.netMinutes(wDays["2026-10-06"], S), 675]);
 
+// Year overview: Mo 28.09.–Fr 02.10. = 40 h (+4:48), Donnerstag liegt im Oktober. Korrektur +12:00 am 30.09.
+const yDays = {}; ["2026-09-28", "2026-09-29", "2026-09-30", "2026-10-01", "2026-10-02"].forEach(k => yDays[k] = W("07:30", "16:00"));
+const yCorr = [{ date: "2026-09-30", min: 720 }];
+const yr = C.yearOverview(yDays, yCorr, S, 2026, "2026-10-20", "12:00");
+cases.push(["Jahr: September Ist 24:00", yr[8].ist, 1440]);
+cases.push(["Jahr: September nur Korrektur", yr[8].overtime, 720]);
+cases.push(["Jahr: Woche zählt zum Oktober (Donnerstag), 2 Leerwochen", yr[9].overtime, 288 - 2 * 1920]);
+cases.push(["Jahr: Saldo Oktober = Gesamtsaldo", yr[9].balance, C.balance(C.weeks(yDays, S, "2026-10-20", "12:00"), yCorr)]);
+cases.push(["Jahr: August noch nicht aktiv", yr[7].active, false]);
+cases.push(["Jahr: November noch nicht aktiv", yr[10].active, false]);
+cases.push(["Folgejahr startet mit Vorjahressaldo", C.yearOverview(yDays, yCorr, S, 2027, "2027-01-10", "12:00")[0].active, true]);
+
 let failed = 0;
 const lines = cases.map(([name, got, want]) => {
   const ok = got === want; if (!ok) failed++;
