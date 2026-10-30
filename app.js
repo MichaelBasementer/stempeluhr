@@ -484,7 +484,22 @@ async function exportPdf(y, m) {
   doc.setFont("helvetica", "normal").setFontSize(8);
   doc.text("Nur abgeschlossene Wochen. Eine Woche über zwei Monate zählt zu dem Monat, in dem ihr Donnerstag liegt.", X.date, py + 2);
   doc.text(`Erstellt am ${dateDE(t)}`, X.date, py + 6);
-  download(`stundennachweis_${y}-${pad(m + 1)}.pdf`, doc.output("blob"));
+  await savePdf(`stundennachweis_${y}-${pad(m + 1)}.pdf`, doc.output("blob"));
+}
+
+// A PDF download inside the installed app ends on a blank page, so on phones it goes through
+// the share sheet. CSV and backup are plain text files and download normally.
+async function savePdf(name, blob) {
+  const file = new File([blob], name, { type: "application/pdf" });
+  const phone = matchMedia("(pointer: coarse)").matches;
+  if (phone && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); toast(name + " weitergegeben"); }
+    catch (e) { toast(e.name === "AbortError" ? "Abgebrochen, keine PDF gespeichert." : "PDF konnte nicht weitergegeben werden: " + e.message); }
+    return;
+  }
+  if (phone && matchMedia("(display-mode: standalone)").matches)
+    return toast("Dieses Handy kann die PDF nicht weitergeben. Öffne die Seite im Browser und versuche es dort.");
+  download(name, blob);
 }
 
 function download(name, data, type) {
