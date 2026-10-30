@@ -96,6 +96,13 @@ const abHol = C.weeks({ "2026-05-04": W("07:30", "16:00"), "2026-05-14": { type:
 cases.push(["Abbau an Feiertag zieht nichts ab", abHol[1].abbau, 0]);
 cases.push(["Abbau-Zeile hat 0 h netto, 8 h Abbau", JSON.stringify((({ net, abbau }) => [net, abbau])(C.dayRows({ "2026-10-12": { type: "abbau" } }, S, "2026-10-12", "2026-10-12", "2026-10-20")[0])), "[0,480]"]);
 
+// Urlaubskonto: 28 Tage + 3 Rest. 25.12.2026 (Feiertag) und Sa 12.12. verbrauchen keinen Tag.
+const vS = { ...S, vacationDays: 28, vacationCarry: { 2026: 3 } };
+const vDays = { "2026-08-03": { type: "urlaub" }, "2026-08-04": { type: "urlaub" }, "2026-11-30": { type: "urlaub" },
+  "2026-12-12": { type: "urlaub" }, "2026-12-25": { type: "urlaub" }, "2025-08-04": { type: "urlaub" }, "2026-08-05": W("07:30", "16:00") };
+cases.push(["Urlaubskonto 2026", JSON.stringify(C.vacationSummary(vDays, 2026, vS, "2026-10-31")), '{"total":31,"used":2,"planned":1,"left":28}']);
+cases.push(["Urlaubskonto 2027 ohne Rest", C.vacationSummary(vDays, 2027, vS, "2026-10-31").total, 28]);
+
 let failed = 0;
 const lines = cases.map(([name, got, want]) => {
   const ok = got === want; if (!ok) failed++;

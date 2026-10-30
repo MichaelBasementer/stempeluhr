@@ -277,7 +277,7 @@ function openDay(k) {
 
 // ---------- Einstellungen ----------
 function openSettings() {
-  const host = document.getElementById("sheetHost"), S = state.settings;
+  const host = document.getElementById("sheetHost"), S = state.settings, thisYear = +todayKey().slice(0, 4);
   const close = () => { host.innerHTML = ""; renderAll(); };
   host.innerHTML = `<div class="scrim" id="scrim"><div class="sheet" role="dialog" aria-label="Einstellungen">
     <h3>Einstellungen</h3>
@@ -287,12 +287,16 @@ function openSettings() {
       <div class="row set-row"><span>Mit Gehalt abgegolten (%)</span><input id="s-coveredPct" value="${S.coveredPct}" inputmode="decimal"></div>
       <div class="row set-row"><span>Stunden pro Arbeitstag<small style="display:block;font-size:12px">auch für Urlaub/Krank/Feiertag</small></span><input id="s-offDayH" value="${S.offDayH}" inputmode="decimal"></div>
     </div>
+    <div class="panel">
+      <div class="row set-row"><span>Urlaubstage pro Jahr</span><input id="s-vacationDays" value="${S.vacationDays}" inputmode="decimal"></div>
+      <div class="row set-row"><span>Resturlaub aus ${thisYear - 1}</span><input id="s-carry" value="${(S.vacationCarry || {})[thisYear] || 0}" inputmode="decimal"></div>
+    </div>
     <div class="actions"><button class="primary" id="csv">CSV exportieren</button></div>
     <div class="actions"><button id="backup">Backup speichern</button><button id="restore">Backup laden</button></div>
     <p class="rule">Deine Daten liegen nur auf diesem Handy. Speichere ab und zu ein Backup, denn wenn Chrome seine Daten löscht, sind die Zeiten weg.</p>
     <div class="actions"><button id="close">Schließen</button></div>
   </div></div>`;
-  ["weeklyH", "coveredPct", "offDayH"].forEach(f => {
+  ["weeklyH", "coveredPct", "offDayH", "vacationDays"].forEach(f => {
     const inp = document.getElementById("s-" + f);
     inp.onchange = () => {
       const v = parseFloat(inp.value.replace(",", "."));
@@ -300,6 +304,12 @@ function openSettings() {
       else { inp.value = state.settings[f]; toast("Bitte eine Zahl zwischen 0 und 100 eingeben."); }
     };
   });
+  const carry = document.getElementById("s-carry");
+  carry.onchange = () => {
+    const v = parseFloat(carry.value.replace(",", "."));
+    if (isFinite(v) && v >= 0 && v <= 100) { state.settings.vacationCarry = { ...S.vacationCarry, [thisYear]: v }; save(); toast("Gespeichert"); }
+    else { carry.value = (S.vacationCarry || {})[thisYear] || 0; toast("Bitte eine Zahl zwischen 0 und 100 eingeben."); }
+  };
   document.getElementById("s-land").onchange = ev => { state.settings.bundesland = ev.target.value; save(); toast("Gespeichert"); };
   document.getElementById("close").onclick = close;
   document.getElementById("scrim").onclick = ev => { if (ev.target.id === "scrim") close(); };

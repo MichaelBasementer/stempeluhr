@@ -1,6 +1,6 @@
 // Pure calculation rules. No DOM, no storage — tested by tests.html and test-calc.js.
 (function (root) {
-  const DEFAULTS = { weeklyH: 32, coveredPct: 10, offDayH: 8, bundesland: "HE" };
+  const DEFAULTS = { weeklyH: 32, coveredPct: 10, offDayH: 8, bundesland: "HE", vacationDays: 0, vacationCarry: {} };
   const LANDS = { BW: "Baden-Württemberg", BY: "Bayern", BE: "Berlin", BB: "Brandenburg", HB: "Bremen", HH: "Hamburg",
     HE: "Hessen", MV: "Mecklenburg-Vorpommern", NI: "Niedersachsen", NW: "Nordrhein-Westfalen", RP: "Rheinland-Pfalz",
     SL: "Saarland", SN: "Sachsen", ST: "Sachsen-Anhalt", SH: "Schleswig-Holstein", TH: "Thüringen" };
@@ -138,6 +138,17 @@
     return t;
   }
 
+  // Vacation days of a year: only Mo–Fr that are no public holiday use up a day.
+  function vacationSummary(days, year, settings, todayKey) {
+    const total = settings.vacationDays + ((settings.vacationCarry || {})[year] || 0);
+    let used = 0, planned = 0;
+    for (const k of Object.keys(days)) {
+      if (days[k].type !== "urlaub" || !k.startsWith(year + "-") || !isWeekday(k) || holidayOn(k, settings.bundesland)) continue;
+      if (k <= todayKey) used++; else planned++;
+    }
+    return { total, used, planned, left: total - used - planned };
+  }
+
   // One row per day in [from, to] for the CSV and the PDF, including automatic holidays.
   function dayRows(days, settings, from, to, todayKey) {
     const ctx = { firstKey: firstEntry(days), todayKey, now: null }, out = [];
@@ -182,7 +193,7 @@
   }
 
   const api = { DEFAULTS, LANDS, easter, holidays, holidayOn, holidayCounts, firstEntry, isWeekday, dayMinutes, dayRows, toMin, fmt, fmtSigned, legalPause, effectivePause, netMinutes, weekDelta,
-    D, key, addDays, mondayOf, isoWeek, weekTarget, weekAbbau, weekIst, weeks, balance, backupDue };
+    D, key, addDays, mondayOf, isoWeek, weekTarget, weekAbbau, vacationSummary, weekIst, weeks, balance, backupDue };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.Calc = api;
 })(this);
