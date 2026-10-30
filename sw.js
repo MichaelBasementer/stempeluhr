@@ -1,6 +1,6 @@
 // Offline cache. Bump VERSION whenever app files change so phones pick up the update.
-const VERSION = "stempeluhr-v4";
-const FILES = ["./", "index.html", "style.css", "calc.js", "app.js", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
+const VERSION = "stempeluhr-v5";
+const FILES = ["./", "index.html", "style.css", "calc.js", "app.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "lib/jspdf.umd.min.js"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));

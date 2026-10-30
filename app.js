@@ -145,7 +145,9 @@ function renderKalender() {
     <div class="cal">${cells}</div>
     <div class="legend"><span style="--c:var(--accent)">Heute</span><span style="--c:var(--off)">Urlaub/Krank/Feiertag = ${C.fmt(S.offDayH * 60)}</span></div>
     <div class="panel"><div class="row total"><span>Summe ${MON[m]}</span><span class="num">${C.fmt(month)}</span></div></div>
+    <div class="actions"><button id="pdf">Stundennachweis als PDF</button></div>
     <p class="rule">Tippe auf einen Tag, um Zeiten einzutragen oder zu ändern.</p>`;
+  document.getElementById("pdf").onclick = () => exportPdf(y, m);
   el.querySelectorAll("[data-day]").forEach(b => b.onclick = () => openDay(b.dataset.day));
   document.getElementById("prev").onclick = () => { viewMonth = m ? [y, m - 1] : [y - 1, 11]; renderKalender(); };
   document.getElementById("next").onclick = () => { viewMonth = m < 11 ? [y, m + 1] : [y + 1, 0]; renderKalender(); };
@@ -429,8 +431,64 @@ function exportCsv() {
   download(`zeiten_${todayKey()}.csv`, "﻿" + rows.join("\r\n"), "text/csv;charset=utf-8");
 }
 
-function download(name, text, type) {
-  const url = URL.createObjectURL(new Blob([text], { type }));
+// The library is only loaded when a PDF is made; the service worker keeps it for offline use.
+function loadJsPdf() {
+  if (window.jspdf) return Promise.resolve();
+  return new Promise((ok, fail) => {
+    const s = document.createElement("script");
+    s.src = "lib/jspdf.umd.min.js"; s.onload = ok;
+    s.onerror = () => fail(new Error("PDF-Bibliothek nicht verfügbar. Öffne die App einmal mit Internet."));
+    document.head.appendChild(s);
+  });
+}
+
+async function exportPdf(y, m) {
+  const S = state.settings, t = todayKey();
+  const from = `${y}-${pad(m + 1)}-01`, to = `${y}-${pad(m + 1)}-${pad(new Date(y, m + 1, 0).getDate())}`;
+  const rows = C.dayRows(state.days, S, from, to, t);
+  if (!rows.length) return toast("Für diesen Monat gibt es keine Einträge.");
+  try { await loadJsPdf(); } catch (e) { return toast(e.message); }
+  const sum = C.yearOverview(state.days, state.corrections, S, y, t, nowHHMM())[m];
+  const doc = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
+  const txt = s => String(s).replace(/−/g, "-"); // the built-in PDF font has no minus sign
+  const X = { date: 15, art: 42, start: 105, end: 122, pause: 139, net: 195 };
+  const head = yy => {
+    doc.setFont("helvetica", "bold").setFontSize(10);
+    doc.text("Datum", X.date, yy); doc.text("Art", X.art, yy); doc.text("Beginn", X.start, yy); doc.text("Ende", X.end, yy);
+    doc.text("Pause", X.pause, yy); doc.text("Netto", X.net, yy, { align: "right" });
+    doc.setLineWidth(0.3).line(X.date, yy + 2, X.net, yy + 2);
+    doc.setFont("helvetica", "normal");
+    return yy + 8;
+  };
+  doc.setFont("helvetica", "bold").setFontSize(16).text(`Stundennachweis ${MON[m]} ${y}`, X.date, 20);
+  let py = head(32);
+  for (const r of rows) {
+    if (py > 270) { doc.addPage(); py = head(20); }
+    const art = r.holiday || (r.abbau ? `Abbau (-${C.fmt(r.abbau)} h)` : TYPES[r.type]);
+    doc.text(`${DOW[C.D(r.key).getUTCDay()]} ${dateDE(r.key).slice(0, 6)}`, X.date, py);
+    doc.text(txt(art), X.art, py); doc.text(r.start, X.start, py); doc.text(r.end, X.end, py);
+    doc.text(r.pause === null ? "" : `${r.pause} min`, X.pause, py);
+    doc.text(C.fmt(r.net), X.net, py, { align: "right" });
+    py += 6.5;
+  }
+  if (py > 250) { doc.addPage(); py = 20; }
+  doc.setLineWidth(0.3).line(X.date, py - 3, X.net, py - 3);
+  py += 4;
+  const total = (label, value) => {
+    doc.setFont("helvetica", "bold").text(label, X.date, py);
+    doc.text(txt(value), X.net, py, { align: "right" }); py += 6.5;
+  };
+  total("Summe Arbeitszeit", C.fmt(sum.ist));
+  total("Überstunden im Monat", C.fmtSigned(sum.overtime));
+  if (sum.balance !== null) total("Saldo am Monatsende", C.fmtSigned(sum.balance));
+  doc.setFont("helvetica", "normal").setFontSize(8);
+  doc.text("Nur abgeschlossene Wochen. Eine Woche über zwei Monate zählt zu dem Monat, in dem ihr Donnerstag liegt.", X.date, py + 2);
+  doc.text(`Erstellt am ${dateDE(t)}`, X.date, py + 6);
+  download(`stundennachweis_${y}-${pad(m + 1)}.pdf`, doc.output("blob"));
+}
+
+function download(name, data, type) {
+  const url = URL.createObjectURL(data instanceof Blob ? data : new Blob([data], { type }));
   const a = document.createElement("a");
   a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
