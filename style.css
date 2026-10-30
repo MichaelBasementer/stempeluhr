@@ -73,6 +73,7 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline
 .empty-state{text-align:center;color:var(--muted);padding:32px 8px;line-height:1.5}
 .wk{display:grid;grid-template-columns:auto 1fr auto;gap:4px 12px;align-items:baseline;padding-block:12px;border-bottom:1px solid var(--line)}
 .wk:last-child{border-bottom:0}
+.wk.corr{cursor:pointer}
 .wk .k{font-weight:600}
 .wk .d{color:var(--muted);font-size:13px}
 .wk .x{font-family:var(--mono);font-weight:600}
@@ -90,6 +91,7 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline
   padding:20px max(16px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:16px}
 .sheet h3{margin:0;font-size:18px}
 .seg{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;background:var(--bg);padding:4px;border-radius:12px}
+.seg.two{grid-template-columns:repeat(2,1fr)}
 .seg button{border:0;background:none;border-radius:9px;padding:10px 0;font:500 14px var(--sans);color:var(--muted);cursor:pointer}
 .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
 .fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}

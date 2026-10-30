@@ -8,12 +8,16 @@ const MON = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "Augu
 
 // ---------- state ----------
 let state = load();
+// Older data and backups lack the newer fields, so every load goes through here.
+function normalize(s) {
+  return { settings: { ...C.DEFAULTS, ...s.settings }, days: s.days, corrections: s.corrections || [], lastBackup: s.lastBackup || null };
+}
 function load() {
   try {
     const s = JSON.parse(localStorage.getItem(STORE));
-    if (s && s.days) return { settings: { ...C.DEFAULTS, ...s.settings }, days: s.days };
+    if (s && s.days) return normalize(s);
   } catch (e) { /* fall through to empty */ }
-  return { settings: { ...C.DEFAULTS }, days: {} };
+  return normalize({ days: {} });
 }
 function save() {
   try { localStorage.setItem(STORE, JSON.stringify(state)); }
@@ -24,6 +28,7 @@ function save() {
 const pad = n => String(n).padStart(2, "0");
 const todayKey = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 const nowHHMM = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const dateDE = k => { const d = C.D(k); return `${pad(d.getUTCDate())}.${pad(d.getUTCMonth() + 1)}.${d.getUTCFullYear()}`; };
 
 // A day before today that was checked in but never checked out.
@@ -57,6 +62,7 @@ function renderHeute() {
 
   el.innerHTML = `
     ${lost ? `<div class="warn"><span>${DOW[C.D(lost).getUTCDay()]}, ${dateDE(lost)}: nicht ausgecheckt</span><button data-open="${lost}">Ende nachtragen</button></div>` : ""}
+    ${C.backupDue(state.lastBackup, ctx.firstKey, t) ? `<div class="warn"><span>${state.lastBackup ? "Dein letztes Backup ist über 7 Tage her." : "Du hast noch kein Backup gespeichert."}</span><button id="backupNow">Backup speichern</button></div>` : ""}
     <div class="clock"><div class="now">${now}</div>
       <div class="state">${running ? `<span class="dot"></span>Eingecheckt seit ${d.start}` : done ? "Ausgecheckt" : off ? TYPES[d.type] : "Noch nicht eingecheckt"}${hol ? ` · ${hol.name}` : ""}</div></div>
     ${button}
@@ -88,6 +94,8 @@ function renderHeute() {
     inp.onblur = () => { pickerOpenUntil = 0; };
     inp.onchange = () => { pickerOpenUntil = 0; setTodayTime(row.dataset.time, inp.value); };
   });
+  const bn = document.getElementById("backupNow");
+  if (bn) bn.onclick = () => { saveBackup(); renderAll(); };
   const u = document.getElementById("undo");
   if (u) u.onclick = () => { state.days[todayKey()].end = null; save(); renderAll(); };
   el.querySelectorAll("[data-open]").forEach(b => b.onclick = () => openDay(b.dataset.open));
@@ -143,17 +151,68 @@ function renderKalender() {
 function renderUeber() {
   const el = document.getElementById("t-ueber"), S = state.settings;
   const ws = C.weeks(state.days, S, todayKey(), nowHHMM());
-  const bal = C.balance(ws);
+  const bal = C.balance(ws, state.corrections);
   const cls = v => v > 0 ? "pos" : v < 0 ? "neg" : "zero";
   const target = S.weeklyH * 60, cap = target * (1 + S.coveredPct / 100);
   el.innerHTML = `
     <div class="saldo"><div class="v ${cls(bal)}">${C.fmtSigned(bal)}</div><div class="cap">Überstunden-Saldo (Std:Min)</div></div>
     <p class="rule">Soll ${C.fmt(target)} pro Woche. Bis ${C.fmt(cap)} (+${S.coveredPct} %) ist mit dem Gehalt abgegolten, nur darüber zählt als Überstunden. Unter ${C.fmt(target)} zählt als Minusstunden. Die laufende Woche zählt erst, wenn sie vorbei ist. In der Woche deines ersten Eintrags zählen nur die Werktage ab diesem Tag. Feiertage von Mo–Fr zählen automatisch.</p>
+    <div class="actions"><button id="addCorr">Korrektur eintragen</button></div>
+    ${state.corrections.length ? `<div class="panel">${state.corrections.slice().sort((a, b) => b.date.localeCompare(a.date)).map(c => `
+      <div class="wk corr" role="button" tabindex="0" data-corr="${esc(c.id)}"><span class="k">Korrektur</span>
+        <span class="d">${dateDE(c.date)}${c.note ? " · " + esc(c.note) : ""}</span>
+        <span class="x ${cls(c.min)}">${C.fmtSigned(c.min)}</span></div>`).join("")}</div>` : ""}
     ${ws.length ? `<div class="panel">${ws.slice().reverse().map(w => `
       <div class="wk"><span class="k">KW ${w.kw}${w.delta === null ? '<span class="pill">läuft</span>' : ""}</span>
         <span class="d">ab ${dateDE(w.monday).slice(0, 6)}${w.target !== target ? ` · Soll <span class="num">${C.fmt(w.target)}</span>` : ""} · Ist <span class="num">${C.fmt(w.ist)}</span></span>
         <span class="x ${w.delta === null ? "zero" : cls(w.delta)}">${w.delta === null ? "–" : C.fmtSigned(w.delta)}</span></div>`).join("")}
     </div>` : `<p class="empty-state">Noch keine Einträge. Checke im Tab „Heute“ ein, dann erscheinen hier deine Wochen.</p>`}`;
+  document.getElementById("addCorr").onclick = () => openCorrection(null);
+  el.querySelectorAll("[data-corr]").forEach(r => {
+    r.onclick = () => openCorrection(r.dataset.corr);
+    r.onkeydown = ev => { if (ev.key === "Enter") openCorrection(r.dataset.corr); };
+  });
+}
+
+// ---------- Korrektur (Startsaldo, Auszahlung) ----------
+function openCorrection(id) {
+  const old = state.corrections.find(c => c.id === id);
+  const host = document.getElementById("sheetHost");
+  const c = { date: old ? old.date : todayKey(), sign: old && old.min < 0 ? -1 : 1, h: old ? Math.floor(Math.abs(old.min) / 60) : "",
+    m: old ? Math.abs(old.min) % 60 : "", note: old ? old.note : "" };
+  let error = "";
+  const close = () => { host.innerHTML = ""; };
+  const draw = () => {
+    host.innerHTML = `<div class="scrim" id="scrim"><div class="sheet" role="dialog" aria-label="Korrektur">
+      <h3>Korrektur</h3>
+      <p class="rule">Für deinen Startsaldo (Plus oder Minus) oder ausgezahlte Stunden (Minus). Zählt sofort im Saldo.</p>
+      <div class="seg two"><button data-s="1" aria-pressed="${c.sign > 0}">+ Stunden</button><button data-s="-1" aria-pressed="${c.sign < 0}">− Stunden</button></div>
+      <div class="fields">
+        <label class="full">Datum<input id="c-date" type="date" value="${esc(c.date)}"></label>
+        <label>Stunden<input id="c-h" type="number" inputmode="numeric" min="0" value="${esc(c.h)}"></label>
+        <label>Minuten<input id="c-m" type="number" inputmode="numeric" min="0" max="59" value="${esc(c.m)}"></label>
+        <label class="full">Notiz<input id="c-note" type="text" maxlength="60" value="${esc(c.note)}"></label>
+      </div>
+      ${error ? `<p class="error">${error}</p>` : ""}
+      <div class="actions">${old ? '<button class="danger" id="c-del">Löschen</button>' : ""}<button id="c-cancel">Abbrechen</button><button class="primary" id="c-save">Speichern</button></div>
+    </div></div>`;
+    const v = i => document.getElementById(i);
+    const read = () => { c.date = v("c-date").value; c.h = v("c-h").value; c.m = v("c-m").value; c.note = v("c-note").value; };
+    host.querySelectorAll("[data-s]").forEach(b => b.onclick = () => { read(); c.sign = +b.dataset.s; draw(); });
+    v("c-cancel").onclick = close;
+    v("scrim").onclick = ev => { if (ev.target.id === "scrim") close(); };
+    if (old) v("c-del").onclick = () => { state.corrections = state.corrections.filter(x => x !== old); save(); close(); renderAll(); };
+    v("c-save").onclick = () => {
+      read();
+      const hours = parseInt(c.h, 10) || 0, mins = parseInt(c.m, 10) || 0, total = hours * 60 + mins;
+      if (!c.date) { error = "Bitte ein Datum eintragen."; return draw(); }
+      if (hours < 0 || mins < 0 || mins > 59 || !total) { error = "Bitte Stunden und Minuten (0–59) eintragen."; return draw(); }
+      const entry = { id: old ? old.id : Date.now().toString(36), date: c.date, min: c.sign * total, note: c.note.trim() };
+      state.corrections = old ? state.corrections.map(x => x === old ? entry : x) : [...state.corrections, entry];
+      save(); close(); renderAll();
+    };
+  };
+  draw();
 }
 
 // ---------- Tag bearbeiten ----------
@@ -233,9 +292,13 @@ function openSettings() {
   document.getElementById("close").onclick = close;
   document.getElementById("scrim").onclick = ev => { if (ev.target.id === "scrim") close(); };
   document.getElementById("csv").onclick = exportCsv;
-  document.getElementById("backup").onclick = () =>
-    download(`stempeluhr-backup_${todayKey()}.json`, JSON.stringify({ app: "stempeluhr", version: 1, ...state }, null, 1), "application/json");
+  document.getElementById("backup").onclick = saveBackup;
   document.getElementById("restore").onclick = () => document.getElementById("restoreFile").click();
+}
+
+function saveBackup() {
+  state.lastBackup = todayKey(); save();
+  download(`stempeluhr-backup_${todayKey()}.json`, JSON.stringify({ app: "stempeluhr", version: 1, ...state }, null, 1), "application/json");
 }
 
 document.getElementById("restoreFile").onchange = async ev => {
@@ -246,7 +309,7 @@ document.getElementById("restoreFile").onchange = async ev => {
     if (!s || s.app !== "stempeluhr" || typeof s.days !== "object") throw new Error("Keine Stempeluhr-Backup-Datei.");
     const n = Object.keys(s.days).length;
     if (!confirm(`Backup mit ${n} Tagen laden? Die aktuellen Einträge werden ersetzt.`)) return;
-    state = { settings: { ...C.DEFAULTS, ...s.settings }, days: s.days };
+    state = normalize(s);
     save(); document.getElementById("sheetHost").innerHTML = ""; renderAll(); toast(`${n} Tage geladen`);
   } catch (e) { toast("Laden fehlgeschlagen: " + e.message); }
 };

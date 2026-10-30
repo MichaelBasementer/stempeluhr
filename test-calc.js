@@ -73,6 +73,14 @@ cases.push(["Himmelfahrt Do 14.05. in Woche ohne Eintrag: Ist 8:00", hw[1].ist, 
 const rows = C.dayRows({ "2026-12-23": W("07:30", "16:00") }, S, "2026-12-23", "2026-12-26", "2026-12-30");
 cases.push(["CSV-Zeilen: Arbeit + 25.12., nicht 26.12.", rows.map(r => r.key + "/" + r.type).join(), "2026-12-23/arbeit,2026-12-25/feiertag"]);
 
+// Corrections + backup reminder
+cases.push(["Saldo mit Startsaldo +12:00 und Auszahlung −8:00", C.balance(ws, [{ min: 720 }, { min: -480 }]), 18 + 240]);
+cases.push(["Backup: nie gespeichert, 6 Tage seit Start → nein", C.backupDue(null, "2026-10-01", "2026-10-07"), false]);
+cases.push(["Backup: nie gespeichert, 7 Tage seit Start → ja", C.backupDue(null, "2026-10-01", "2026-10-08"), true]);
+cases.push(["Backup: letztes vor 7 Tagen → ja", C.backupDue("2026-10-20", "2026-10-01", "2026-10-27"), true]);
+cases.push(["Backup: letztes vor 3 Tagen → nein", C.backupDue("2026-10-24", "2026-10-01", "2026-10-27"), false]);
+cases.push(["Backup: keine Daten → nein", C.backupDue(null, null, "2026-10-27"), false]);
+
 let failed = 0;
 const lines = cases.map(([name, got, want]) => {
   const ok = got === want; if (!ok) failed++;

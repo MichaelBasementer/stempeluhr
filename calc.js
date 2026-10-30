@@ -157,10 +157,18 @@
     return out;
   }
 
-  const balance = ws => ws.reduce((a, w) => a + (w.delta ?? 0), 0);
+  // Finished weeks plus manual corrections (starting balance, payouts).
+  const balance = (ws, corrections = []) =>
+    ws.reduce((a, w) => a + (w.delta ?? 0), 0) + corrections.reduce((a, c) => a + c.min, 0);
+
+  // Remind after n days without a backup, counted from the first entry if there never was one.
+  function backupDue(lastBackup, firstKey, todayKey, n = 7) {
+    const ref = lastBackup || firstKey;
+    return !!ref && (D(todayKey) - D(ref)) / 864e5 >= n;
+  }
 
   const api = { DEFAULTS, LANDS, easter, holidays, holidayOn, holidayCounts, firstEntry, isWeekday, dayMinutes, dayRows, toMin, fmt, fmtSigned, legalPause, effectivePause, netMinutes, weekDelta,
-    D, key, addDays, mondayOf, isoWeek, weekTarget, weekIst, weeks, balance };
+    D, key, addDays, mondayOf, isoWeek, weekTarget, weekIst, weeks, balance, backupDue };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.Calc = api;
 })(this);
