@@ -81,6 +81,21 @@ cases.push(["Backup: letztes vor 7 Tagen → ja", C.backupDue("2026-10-20", "202
 cases.push(["Backup: letztes vor 3 Tagen → nein", C.backupDue("2026-10-24", "2026-10-01", "2026-10-27"), false]);
 cases.push(["Backup: keine Daten → nein", C.backupDue(null, null, "2026-10-27"), false]);
 
+// Überstundenabbau: Mo 12.10. Abbau 8 h, Di–Do 8 h gearbeitet = 24 h → Woche 0, Saldo −8:00.
+const abDays = { "2026-10-05": W("07:30", "16:00"), "2026-10-06": W("07:30", "16:00"), "2026-10-07": W("07:30", "16:00"), "2026-10-08": W("07:30", "16:00"),
+  "2026-10-12": { type: "abbau", hours: 8 }, "2026-10-13": W("07:30", "16:00"), "2026-10-14": W("07:30", "16:00"), "2026-10-15": W("07:30", "16:00") };
+const abW = C.weeks(abDays, S, "2026-10-20", "12:00");
+cases.push(["Abbau zählt 0 h Ist", abW[1].ist, 1440]);
+cases.push(["Abbau senkt Soll auf 24:00", abW[1].target, 1440]);
+cases.push(["Abbau-Woche: genau −8:00", abW[1].delta, -480]);
+abDays["2026-10-16"] = W("07:30", "16:00");
+cases.push(["Abbau auch in Woche mit 32 h: +5:36 −8:00", C.weeks(abDays, S, "2026-10-20", "12:00")[1].delta, 336 - 480]);
+const abHalf = C.weeks({ "2026-10-05": W("07:30", "16:00"), "2026-10-12": { type: "abbau", hours: 4 } }, S, "2026-10-20", "12:00");
+cases.push(["Halber Abbau 4 h: Soll 28:00", abHalf[1].target, 1680]);
+const abHol = C.weeks({ "2026-05-04": W("07:30", "16:00"), "2026-05-14": { type: "abbau", hours: 8 } }, S, "2026-05-20", "12:00");
+cases.push(["Abbau an Feiertag zieht nichts ab", abHol[1].abbau, 0]);
+cases.push(["Abbau-Zeile hat 0 h netto, 8 h Abbau", JSON.stringify((({ net, abbau }) => [net, abbau])(C.dayRows({ "2026-10-12": { type: "abbau" } }, S, "2026-10-12", "2026-10-12", "2026-10-20")[0])), "[0,480]"]);
+
 let failed = 0;
 const lines = cases.map(([name, got, want]) => {
   const ok = got === want; if (!ok) failed++;

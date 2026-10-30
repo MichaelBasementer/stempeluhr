@@ -1,7 +1,7 @@
 // UI + storage. All rules live in calc.js.
 const C = window.Calc;
 const STORE = "zeit.v1";
-const TYPES = { arbeit: "Arbeit", urlaub: "Urlaub", krank: "Krank", feiertag: "Feiertag" };
+const TYPES = { arbeit: "Arbeit", urlaub: "Urlaub", krank: "Krank", feiertag: "Feiertag", abbau: "Abbau" };
 const DOW = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 const DOW_LONG = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
 const MON = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
@@ -50,7 +50,8 @@ function renderHeute() {
   const present = d && !off && d.start ? Math.max(0, C.toMin(end) - C.toMin(d.start)) : 0;
   const pause = d && !off && d.start ? C.effectivePause(present, d.pause) : 0;
   const wk = C.weekIst(state.days, C.mondayOf(t), S, t, now);
-  const target = C.weekTarget(C.mondayOf(t), Object.keys(state.days).sort()[0], S), cap = target * (1 + S.coveredPct / 100);
+  const target = Math.max(0, C.weekTarget(C.mondayOf(t), C.firstEntry(state.days), S) - C.weekAbbau(state.days, C.mondayOf(t), S, t));
+  const cap = target * (1 + S.coveredPct / 100);
   const lost = forgottenDay();
   const ctx = { firstKey: C.firstEntry(state.days), todayKey: t, now };
   const hol = C.holidayOn(t, S.bundesland), holCounts = C.holidayCounts(t, S, ctx);
@@ -164,7 +165,7 @@ function renderUeber() {
         <span class="x ${cls(c.min)}">${C.fmtSigned(c.min)}</span></div>`).join("")}</div>` : ""}
     ${ws.length ? `<div class="panel">${ws.slice().reverse().map(w => `
       <div class="wk"><span class="k">KW ${w.kw}${w.delta === null ? '<span class="pill">läuft</span>' : ""}</span>
-        <span class="d">ab ${dateDE(w.monday).slice(0, 6)}${w.target !== target ? ` · Soll <span class="num">${C.fmt(w.target)}</span>` : ""} · Ist <span class="num">${C.fmt(w.ist)}</span></span>
+        <span class="d">ab ${dateDE(w.monday).slice(0, 6)}${w.target !== target ? ` · Soll <span class="num">${C.fmt(w.target)}</span>` : ""} · Ist <span class="num">${C.fmt(w.ist)}</span>${w.abbau ? ` · Abbau <span class="num">${C.fmt(w.abbau)}</span>` : ""}</span>
         <span class="x ${w.delta === null ? "zero" : cls(w.delta)}">${w.delta === null ? "–" : C.fmtSigned(w.delta)}</span></div>`).join("")}
     </div>` : `<p class="empty-state">Noch keine Einträge. Checke im Tab „Heute“ ein, dann erscheinen hier deine Wochen.</p>`}`;
   document.getElementById("addCorr").onclick = () => openCorrection(null);
@@ -228,13 +229,15 @@ function openDay(k) {
     host.innerHTML = `<div class="scrim" id="scrim"><div class="sheet" role="dialog" aria-label="Tag bearbeiten">
       <h3>${DOW_LONG[dt.getUTCDay()]}, ${dateDE(k)} · KW ${C.isoWeek(k)}</h3>
       ${hol ? `<p class="holiday-note">${hol.name}${C.isWeekday(k) ? ` · zählt immer ${C.fmt(S.offDayH * 60)}` : ""}</p>` : ""}
-      <div class="seg">${Object.keys(TYPES).map(t => `<button data-t="${t}" aria-pressed="${d.type === t}">${TYPES[t]}</button>`).join("")}</div>
+      <div class="seg five">${Object.keys(TYPES).map(t => `<button data-t="${t}" aria-pressed="${d.type === t}">${TYPES[t]}</button>`).join("")}</div>
       ${work ? `<div class="fields">
         <label>Beginn<input id="f-start" type="time" value="${d.start || ""}"></label>
         <label>Ende<input id="f-end" type="time" value="${d.end || ""}"></label>
         <label class="full">Pause in Minuten (gesetzlich mind. ${legal})<input id="f-pause" type="number" inputmode="numeric" min="${legal}" step="5" value="${pause}"></label>
       </div>
       <div class="result"><span>Arbeitszeit</span><b>${present > 0 ? C.fmt(present - pause) : "–"}</b></div>`
+      : d.type === "abbau" ? `<div class="fields"><label class="full">Stunden abbauen<input id="f-hours" inputmode="decimal" value="${String(d.hours ?? S.offDayH).replace(".", ",")}"></label></div>
+      <div class="result"><span>Geht vom Saldo ab</span><b>${hol && C.isWeekday(k) ? "0:00" : C.fmt(-(d.hours ?? S.offDayH) * 60)}</b></div>`
       : `<div class="result"><span>Zählt als</span><b>${C.fmt(S.offDayH * 60)}</b></div>`}
       ${error ? `<p class="error">${error}</p>` : ""}
       <div class="actions"><button class="danger" id="del">Löschen</button><button id="cancel">Abbrechen</button><button class="primary" id="save">Speichern</button></div>
@@ -247,6 +250,12 @@ function openDay(k) {
       // Only a value above the legal minimum is stored as a manual pause.
       p.onchange = () => { const v = Math.max(0, parseInt(p.value, 10) || 0); d.pause = v > legal ? v : null; draw(); };
     }
+    const h = document.getElementById("f-hours");
+    if (h) h.onchange = () => {
+      const v = parseFloat(h.value.replace(",", "."));
+      if (isFinite(v) && v > 0 && v <= 24) { d.hours = v; error = ""; } else error = "Bitte Stunden zwischen 0 und 24 eintragen.";
+      draw();
+    };
     document.getElementById("cancel").onclick = close;
     document.getElementById("scrim").onclick = ev => { if (ev.target.id === "scrim") close(); };
     document.getElementById("del").onclick = () => { delete state.days[k]; save(); close(); renderAll(); };
@@ -256,6 +265,9 @@ function openDay(k) {
         if (d.end && C.toMin(d.end) <= C.toMin(d.start)) { error = "Das Ende muss nach dem Beginn liegen."; return draw(); }
         if (!d.end && k !== todayKey()) { error = "Bitte ein Ende eintragen."; return draw(); }
         state.days[k] = { type: "arbeit", start: d.start, end: d.end || null, pause: d.pause || null };
+      } else if (d.type === "abbau") {
+        if (error) return draw();
+        state.days[k] = { type: "abbau", hours: d.hours ?? S.offDayH };
       } else state.days[k] = { type: d.type };
       save(); close(); renderAll();
     };
@@ -319,7 +331,7 @@ function exportCsv() {
   const rows = ["Datum;Tag;KW;Art;Beginn;Ende;Pause (min);Netto (h)"];
   const keys = Object.keys(state.days).sort(), t = todayKey();
   if (keys.length) C.dayRows(state.days, S, keys[0], keys[keys.length - 1] > t ? keys[keys.length - 1] : t, t).forEach(r => {
-    rows.push([dateDE(r.key), DOW[C.D(r.key).getUTCDay()], C.isoWeek(r.key), r.holiday ? `Feiertag (${r.holiday})` : TYPES[r.type],
+    rows.push([dateDE(r.key), DOW[C.D(r.key).getUTCDay()], C.isoWeek(r.key), r.holiday ? `Feiertag (${r.holiday})` : r.abbau ? `Abbau (${C.fmt(r.abbau)} h)` : TYPES[r.type],
       r.start, r.end, r.pause ?? "", (r.net / 60).toFixed(2).replace(".", ",")].join(";"));
   });
   // BOM + semicolons + decimal comma so German Excel opens it correctly.

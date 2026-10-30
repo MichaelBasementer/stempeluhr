@@ -22,7 +22,7 @@
 
   // Net minutes for one day entry. endOverride is used for a running day ("now").
   function netMinutes(day, settings, endOverride) {
-    if (!day) return 0;
+    if (!day || day.type === "abbau") return 0;
     if (day.type && day.type !== "arbeit") return settings.offDayH * 60;
     const end = day.end || endOverride;
     if (!day.start || !end) return 0;
@@ -35,7 +35,7 @@
   // targetMin is the week's target (shortened in the start week), default the weekly target.
   function weekDelta(istMin, settings, targetMin) {
     const target = targetMin ?? settings.weeklyH * 60;
-    const cap = target * (1 + settings.coveredPct / 100);
+    const cap = target + target * settings.coveredPct / 100;
     if (istMin < target) return istMin - target;
     if (istMin <= cap) return 0;
     return istMin - cap;
@@ -127,6 +127,17 @@
     return t;
   }
 
+  // Abbau hours of a week. A counting holiday wins, so nothing is taken off on that day.
+  function weekAbbau(days, monday, settings, todayKey) {
+    const ctx = { firstKey: firstEntry(days), todayKey };
+    let t = 0;
+    for (let i = 0; i < 7; i++) {
+      const k = addDays(monday, i), d = days[k];
+      if (d && d.type === "abbau" && !holidayCounts(k, settings, ctx)) t += (d.hours ?? settings.offDayH) * 60;
+    }
+    return t;
+  }
+
   // One row per day in [from, to] for the CSV and the PDF, including automatic holidays.
   function dayRows(days, settings, from, to, todayKey) {
     const ctx = { firstKey: firstEntry(days), todayKey, now: null }, out = [];
@@ -137,7 +148,8 @@
       out.push({ key: k, type: counts ? "feiertag" : d.type, holiday: counts ? holidayOn(k, settings.bundesland).name : "",
         start: worked ? d.start : "", end: worked ? d.end : "",
         pause: worked ? effectivePause(toMin(d.end) - toMin(d.start), d.pause) : null,
-        net: dayMinutes(k, d, settings, ctx) });
+        net: dayMinutes(k, d, settings, ctx),
+        abbau: !counts && d.type === "abbau" ? (d.hours ?? settings.offDayH) * 60 : 0 });
     }
     return out;
   }
@@ -151,8 +163,10 @@
     const out = [];
     for (let m = mondayOf(keys[0]); m <= cur; m = addDays(m, 7)) {
       const ist = weekIst(days, m, settings, todayKey, nowHHMM);
-      const target = weekTarget(m, keys[0], settings);
-      out.push({ monday: m, kw: isoWeek(m), ist, target, delta: m === cur ? null : weekDelta(ist, settings, target) });
+      // Abbau lowers the week's target and comes off the balance exactly, whatever else was worked.
+      const abbau = weekAbbau(days, m, settings, todayKey);
+      const target = Math.max(0, weekTarget(m, keys[0], settings) - abbau);
+      out.push({ monday: m, kw: isoWeek(m), ist, target, abbau, delta: m === cur ? null : weekDelta(ist, settings, target) - abbau });
     }
     return out;
   }
@@ -168,7 +182,7 @@
   }
 
   const api = { DEFAULTS, LANDS, easter, holidays, holidayOn, holidayCounts, firstEntry, isWeekday, dayMinutes, dayRows, toMin, fmt, fmtSigned, legalPause, effectivePause, netMinutes, weekDelta,
-    D, key, addDays, mondayOf, isoWeek, weekTarget, weekIst, weeks, balance, backupDue };
+    D, key, addDays, mondayOf, isoWeek, weekTarget, weekAbbau, weekIst, weeks, balance, backupDue };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.Calc = api;
 })(this);
