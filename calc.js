@@ -82,25 +82,25 @@
     const fix = (mmdd, ...rest) => add(`${year}-${mmdd}`, ...rest);
     fix("01-01", "Neujahr", "Neujahr");
     fix("01-06", "Heilige Drei Könige", "3 Könige", "BW BY ST");
-    fix("03-08", "Internationaler Frauentag", "Frauent.", "BE MV");
-    add(addDays(os, -2), "Karfreitag", "Karfr.");
+    fix("03-08", "Internationaler Frauentag", "Frauent", "BE MV");
+    add(addDays(os, -2), "Karfreitag", "Karfr");
     add(os, "Ostersonntag", "Ostern", "BB HE");
-    add(addDays(os, 1), "Ostermontag", "Osterm.");
+    add(addDays(os, 1), "Ostermontag", "Osterm");
     fix("05-01", "Tag der Arbeit", "1. Mai");
-    add(addDays(os, 39), "Christi Himmelfahrt", "Himmelf.");
-    add(addDays(os, 49), "Pfingstsonntag", "Pfingst.", "BB HE");
-    add(addDays(os, 50), "Pfingstmontag", "Pfingstm.");
-    add(addDays(os, 60), "Fronleichnam", "Fronl.", "BW BY HE NW RP SL");
-    fix("08-15", "Mariä Himmelfahrt", "M. Himm.", "SL");
-    fix("09-20", "Weltkindertag", "Kindert.", "TH");
+    add(addDays(os, 39), "Christi Himmelfahrt", "Himmelf");
+    add(addDays(os, 49), "Pfingstsonntag", "Pfingst", "BB HE");
+    add(addDays(os, 50), "Pfingstmontag", "Pfingstm");
+    add(addDays(os, 60), "Fronleichnam", "Fronl", "BW BY HE NW RP SL");
+    fix("08-15", "Mariä Himmelfahrt", "M.Himm", "SL");
+    fix("09-20", "Weltkindertag", "Kindert", "TH");
     fix("10-03", "Tag der Deutschen Einheit", "Einheit");
-    fix("10-31", "Reformationstag", "Reform.", "BB HB HH MV NI SN ST SH TH");
-    fix("11-01", "Allerheiligen", "Allerh.", "BW BY NW RP SL");
+    fix("10-31", "Reformationstag", "Reform", "BB HB HH MV NI SN ST SH TH");
+    fix("11-01", "Allerheiligen", "Allerh", "BW BY NW RP SL");
     let bb = `${year}-11-22`; // Buß- und Bettag: the Wednesday before 23 November
     while (D(bb).getUTCDay() !== 3) bb = addDays(bb, -1);
     add(bb, "Buß- und Bettag", "Bußtag", "SN");
-    fix("12-25", "1. Weihnachtstag", "1. Weihn.");
-    fix("12-26", "2. Weihnachtstag", "2. Weihn.");
+    fix("12-25", "1. Weihnachtstag", "1.Weihn");
+    fix("12-26", "2. Weihnachtstag", "2.Weihn");
     return holidayCache[id] = out;
   }
   const holidayOn = (k, land) => holidays(+k.slice(0, 4), land)[k] || null;

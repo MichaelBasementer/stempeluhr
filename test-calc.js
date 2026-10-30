@@ -59,7 +59,7 @@ cases.push(["Fronleichnam 2026 in HE", C.holidayOn("2026-06-04", "HE")?.name, "F
 cases.push(["Bußtag 2026 in SN", C.holidayOn("2026-11-18", "SN")?.name, "Buß- und Bettag"]);
 cases.push(["Kein Bußtag in HE", C.holidayOn("2026-11-18", "HE"), null]);
 cases.push(["Kein Reformationstag in HE", C.holidayOn("2026-10-31", "HE"), null]);
-cases.push(["Reformationstag in NI", C.holidayOn("2026-10-31", "NI")?.short, "Reform."]);
+cases.push(["Reformationstag in NI", C.holidayOn("2026-10-31", "NI")?.short, "Reform"]);
 cases.push(["3 Könige in BY", C.holidayOn("2027-01-06", "BY")?.name, "Heilige Drei Könige"]);
 const hctx = (first, today, now) => ({ firstKey: first, todayKey: today, now: now || null });
 cases.push(["Feiertag Fr ohne Eintrag → 8:00", C.dayMinutes("2026-12-25", undefined, S, hctx("2026-10-01", "2026-12-30")), 480]);
