@@ -52,6 +52,27 @@ const ws2 = C.weeks(start, S, "2026-10-22", "12:00");
 cases.push(["Beispiel Do+Fr je 8 h: KW 40 Delta 0", ws2[0].delta, 0]);
 cases.push(["Beispiel: KW 41 (leer) zählt −32:00", ws2[1].delta, -1920]);
 
+// Holidays (Hessen by default). 25.12.2026 is a Friday, 26.12. a Saturday, Fronleichnam 04.06.
+cases.push(["Ostern 2026 = 05.04.", C.easter(2026), "2026-04-05"]);
+cases.push(["Ostern 2027 = 28.03.", C.easter(2027), "2027-03-28"]);
+cases.push(["Fronleichnam 2026 in HE", C.holidayOn("2026-06-04", "HE")?.name, "Fronleichnam"]);
+cases.push(["Bußtag 2026 in SN", C.holidayOn("2026-11-18", "SN")?.name, "Buß- und Bettag"]);
+cases.push(["Kein Bußtag in HE", C.holidayOn("2026-11-18", "HE"), null]);
+cases.push(["Kein Reformationstag in HE", C.holidayOn("2026-10-31", "HE"), null]);
+cases.push(["Reformationstag in NI", C.holidayOn("2026-10-31", "NI")?.short, "Reform."]);
+cases.push(["3 Könige in BY", C.holidayOn("2027-01-06", "BY")?.name, "Heilige Drei Könige"]);
+const hctx = (first, today, now) => ({ firstKey: first, todayKey: today, now: now || null });
+cases.push(["Feiertag Fr ohne Eintrag → 8:00", C.dayMinutes("2026-12-25", undefined, S, hctx("2026-10-01", "2026-12-30")), 480]);
+cases.push(["Feiertag mit 5 h Eintrag bleibt 8:00", C.dayMinutes("2026-12-25", W("08:00", "13:00"), S, hctx("2026-10-01", "2026-12-30")), 480]);
+cases.push(["Feiertag Sa zählt nichts", C.dayMinutes("2026-12-26", undefined, S, hctx("2026-10-01", "2026-12-30")), 0]);
+cases.push(["Arbeit an Sa-Feiertag zählt normal", C.dayMinutes("2026-12-26", W("08:00", "13:00"), S, hctx("2026-10-01", "2026-12-30")), 300]);
+cases.push(["Feiertag vor erstem Eintrag zählt nichts", C.dayMinutes("2026-05-01", undefined, S, hctx("2026-10-01", "2026-12-30")), 0]);
+cases.push(["Zukünftiger Feiertag zählt noch nicht", C.dayMinutes("2026-12-25", undefined, S, hctx("2026-10-01", "2026-12-24")), 0]);
+const hw = C.weeks({ "2026-05-04": W("07:30", "16:00") }, S, "2026-05-20", "12:00");
+cases.push(["Himmelfahrt Do 14.05. in Woche ohne Eintrag: Ist 8:00", hw[1].ist, 480]);
+const rows = C.dayRows({ "2026-12-23": W("07:30", "16:00") }, S, "2026-12-23", "2026-12-26", "2026-12-30");
+cases.push(["CSV-Zeilen: Arbeit + 25.12., nicht 26.12.", rows.map(r => r.key + "/" + r.type).join(), "2026-12-23/arbeit,2026-12-25/feiertag"]);
+
 let failed = 0;
 const lines = cases.map(([name, got, want]) => {
   const ok = got === want; if (!ok) failed++;

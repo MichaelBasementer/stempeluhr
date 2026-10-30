@@ -105,5 +105,7 @@ input{font:500 18px var(--mono);padding:12px;border-radius:12px;border:1px solid
 .actions .danger{color:var(--minus);flex:0 0 auto;padding-inline:18px}
 .set-row{align-items:center}
 .set-row input{width:96px;text-align:right}
+select{font:500 15px var(--sans);padding:10px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink);min-width:0;max-width:200px}
+.holiday-note{margin:0;color:var(--off);font-size:14px;font-weight:600}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(92px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;z-index:30;max-width:calc(100% - 32px)}
 @media (prefers-reduced-motion:no-preference){.sheet{animation:up .18s ease-out}@keyframes up{from{transform:translateY(24px);opacity:.6}}}

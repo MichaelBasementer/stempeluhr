@@ -47,6 +47,8 @@ function renderHeute() {
   const wk = C.weekIst(state.days, C.mondayOf(t), S, t, now);
   const target = C.weekTarget(C.mondayOf(t), Object.keys(state.days).sort()[0], S), cap = target * (1 + S.coveredPct / 100);
   const lost = forgottenDay();
+  const ctx = { firstKey: C.firstEntry(state.days), todayKey: t, now };
+  const hol = C.holidayOn(t, S.bundesland), holCounts = C.holidayCounts(t, S, ctx);
 
   let button;
   if (off) button = `<button class="big done" disabled>Heute: ${TYPES[d.type]}</button><button class="link" data-open="${t}">Ändern</button>`;
@@ -56,13 +58,13 @@ function renderHeute() {
   el.innerHTML = `
     ${lost ? `<div class="warn"><span>${DOW[C.D(lost).getUTCDay()]}, ${dateDE(lost)}: nicht ausgecheckt</span><button data-open="${lost}">Ende nachtragen</button></div>` : ""}
     <div class="clock"><div class="now">${now}</div>
-      <div class="state">${running ? `<span class="dot"></span>Eingecheckt seit ${d.start}` : done ? "Ausgecheckt" : off ? TYPES[d.type] : "Noch nicht eingecheckt"}</div></div>
+      <div class="state">${running ? `<span class="dot"></span>Eingecheckt seit ${d.start}` : done ? "Ausgecheckt" : off ? TYPES[d.type] : "Noch nicht eingecheckt"}${hol ? ` · ${hol.name}` : ""}</div></div>
     ${button}
     ${off ? "" : `<div class="panel">
       <div class="row tap" data-time="start"><span>Beginn</span><span class="num tapval">${d && d.start || "eintragen"}</span><input type="time" tabindex="-1" aria-label="Beginn" value="${d && d.start || ""}"></div>
       <div class="row ${d && d.start ? "tap" : ""}" data-time="end"><span>Ende</span><span class="num ${d && d.start ? "tapval" : ""}">${done ? d.end : running ? "läuft" : "–"}</span><input type="time" tabindex="-1" aria-label="Ende" value="${done ? d.end : ""}" ${d && d.start ? "" : "disabled"}></div>
       <div class="row"><span>Pause</span><span class="num">${pause} min<span class="hint">${d && d.pause > C.legalPause(present) ? "von Hand" : pause ? "automatisch, § 4 ArbZG" : "ab 6 h Anwesenheit"}</span></span></div>
-      <div class="row total"><span>Arbeitszeit</span><span class="num">${C.fmt(present - pause)}</span></div>
+      <div class="row total"><span>${holCounts ? "Zählt (Feiertag)" : "Arbeitszeit"}</span><span class="num">${C.fmt(holCounts ? S.offDayH * 60 : present - pause)}</span></div>
     </div>`}
     <div class="week">
       <div class="lbl"><span>Diese Woche (KW ${C.isoWeek(t)})</span><span class="num">${C.fmt(wk)} / ${C.fmt(target)}</span></div>
@@ -112,18 +114,19 @@ function setTodayTime(field, v) {
 let viewMonth = (() => { const d = new Date(); return [d.getFullYear(), d.getMonth()]; })();
 function renderKalender() {
   const [y, m] = viewMonth, el = document.getElementById("t-kalender"), S = state.settings;
-  const t = todayKey();
+  const t = todayKey(), ctx = { firstKey: C.firstEntry(state.days), todayKey: t, now: nowHHMM() };
   const lead = (new Date(y, m, 1).getDay() + 6) % 7, days = new Date(y, m + 1, 0).getDate();
   let cells = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].map(w => `<div class="wd">${w}</div>`).join("");
   for (let i = 0; i < lead; i++) cells += `<button class="empty" tabindex="-1" aria-hidden="true"></button>`;
   let month = 0;
   for (let i = 1; i <= days; i++) {
     const k = `${y}-${pad(m + 1)}-${pad(i)}`, d = state.days[k], dow = (lead + i - 1) % 7;
-    const net = C.netMinutes(d, S, k === t ? nowHHMM() : null);
+    const net = C.dayMinutes(k, d, S, ctx), hol = C.holidayOn(k, S.bundesland);
     month += net;
     let sub = "";
-    if (d) sub = d.type !== "arbeit" ? TYPES[d.type] : d.end ? C.fmt(net) : "offen";
-    cells += `<button data-day="${k}" class="${dow > 4 ? "we" : ""} ${k === t ? "today" : ""} ${d && d.type !== "arbeit" ? "off" : ""}" aria-label="${i}. ${MON[m]}"><span>${i}</span><small>${sub || "&nbsp;"}</small></button>`;
+    if (hol) sub = hol.short;
+    else if (d) sub = d.type !== "arbeit" ? TYPES[d.type] : d.end ? C.fmt(net) : "offen";
+    cells += `<button data-day="${k}" class="${dow > 4 ? "we" : ""} ${k === t ? "today" : ""} ${hol || (d && d.type !== "arbeit") ? "off" : ""}" aria-label="${i}. ${MON[m]}${hol ? ", " + hol.name : ""}"><span>${i}</span><small>${sub || "&nbsp;"}</small></button>`;
   }
   el.innerHTML = `
     <div class="monthbar"><button class="icon-btn" id="prev" aria-label="Vorheriger Monat">‹</button><h2>${MON[m]} ${y}</h2><button class="icon-btn" id="next" aria-label="Nächster Monat">›</button></div>
@@ -145,7 +148,7 @@ function renderUeber() {
   const target = S.weeklyH * 60, cap = target * (1 + S.coveredPct / 100);
   el.innerHTML = `
     <div class="saldo"><div class="v ${cls(bal)}">${C.fmtSigned(bal)}</div><div class="cap">Überstunden-Saldo (Std:Min)</div></div>
-    <p class="rule">Soll ${C.fmt(target)} pro Woche. Bis ${C.fmt(cap)} (+${S.coveredPct} %) ist mit dem Gehalt abgegolten, nur darüber zählt als Überstunden. Unter ${C.fmt(target)} zählt als Minusstunden. Die laufende Woche zählt erst, wenn sie vorbei ist. In der Woche deines ersten Eintrags zählen nur die Werktage ab diesem Tag.</p>
+    <p class="rule">Soll ${C.fmt(target)} pro Woche. Bis ${C.fmt(cap)} (+${S.coveredPct} %) ist mit dem Gehalt abgegolten, nur darüber zählt als Überstunden. Unter ${C.fmt(target)} zählt als Minusstunden. Die laufende Woche zählt erst, wenn sie vorbei ist. In der Woche deines ersten Eintrags zählen nur die Werktage ab diesem Tag. Feiertage von Mo–Fr zählen automatisch.</p>
     ${ws.length ? `<div class="panel">${ws.slice().reverse().map(w => `
       <div class="wk"><span class="k">KW ${w.kw}${w.delta === null ? '<span class="pill">läuft</span>' : ""}</span>
         <span class="d">ab ${dateDE(w.monday).slice(0, 6)}${w.target !== target ? ` · Soll <span class="num">${C.fmt(w.target)}</span>` : ""} · Ist <span class="num">${C.fmt(w.ist)}</span></span>
@@ -156,7 +159,7 @@ function renderUeber() {
 // ---------- Tag bearbeiten ----------
 function openDay(k) {
   const d = JSON.parse(JSON.stringify(state.days[k] || { type: "arbeit", start: "", end: "" }));
-  const host = document.getElementById("sheetHost"), dt = C.D(k), S = state.settings;
+  const host = document.getElementById("sheetHost"), dt = C.D(k), S = state.settings, hol = C.holidayOn(k, S.bundesland);
   let error = "";
   const close = () => { host.innerHTML = ""; };
   const draw = () => {
@@ -165,6 +168,7 @@ function openDay(k) {
     const legal = C.legalPause(present), pause = C.effectivePause(present, d.pause);
     host.innerHTML = `<div class="scrim" id="scrim"><div class="sheet" role="dialog" aria-label="Tag bearbeiten">
       <h3>${DOW_LONG[dt.getUTCDay()]}, ${dateDE(k)} · KW ${C.isoWeek(k)}</h3>
+      ${hol ? `<p class="holiday-note">${hol.name}${C.isWeekday(k) ? ` · zählt immer ${C.fmt(S.offDayH * 60)}` : ""}</p>` : ""}
       <div class="seg">${Object.keys(TYPES).map(t => `<button data-t="${t}" aria-pressed="${d.type === t}">${TYPES[t]}</button>`).join("")}</div>
       ${work ? `<div class="fields">
         <label>Beginn<input id="f-start" type="time" value="${d.start || ""}"></label>
@@ -207,6 +211,7 @@ function openSettings() {
   host.innerHTML = `<div class="scrim" id="scrim"><div class="sheet" role="dialog" aria-label="Einstellungen">
     <h3>Einstellungen</h3>
     <div class="panel">
+      <div class="row set-row"><span>Bundesland</span><select id="s-land" aria-label="Bundesland">${Object.entries(C.LANDS).map(([c, n]) => `<option value="${c}" ${c === S.bundesland ? "selected" : ""}>${n}</option>`).join("")}</select></div>
       <div class="row set-row"><span>Soll pro Woche (h)</span><input id="s-weeklyH" value="${S.weeklyH}" inputmode="decimal"></div>
       <div class="row set-row"><span>Mit Gehalt abgegolten (%)</span><input id="s-coveredPct" value="${S.coveredPct}" inputmode="decimal"></div>
       <div class="row set-row"><span>Stunden pro Arbeitstag<small style="display:block;font-size:12px">auch für Urlaub/Krank/Feiertag</small></span><input id="s-offDayH" value="${S.offDayH}" inputmode="decimal"></div>
@@ -224,6 +229,7 @@ function openSettings() {
       else { inp.value = state.settings[f]; toast("Bitte eine Zahl zwischen 0 und 100 eingeben."); }
     };
   });
+  document.getElementById("s-land").onchange = ev => { state.settings.bundesland = ev.target.value; save(); toast("Gespeichert"); };
   document.getElementById("close").onclick = close;
   document.getElementById("scrim").onclick = ev => { if (ev.target.id === "scrim") close(); };
   document.getElementById("csv").onclick = exportCsv;
@@ -248,12 +254,10 @@ document.getElementById("restoreFile").onchange = async ev => {
 function exportCsv() {
   const S = state.settings;
   const rows = ["Datum;Tag;KW;Art;Beginn;Ende;Pause (min);Netto (h)"];
-  Object.keys(state.days).sort().forEach(k => {
-    const d = state.days[k];
-    if (d.type === "arbeit" && !d.end) return;
-    const pause = d.type === "arbeit" ? C.effectivePause(C.toMin(d.end) - C.toMin(d.start), d.pause) : "";
-    rows.push([dateDE(k), DOW[C.D(k).getUTCDay()], C.isoWeek(k), TYPES[d.type], d.start || "", d.end || "", pause,
-      (C.netMinutes(d, S) / 60).toFixed(2).replace(".", ",")].join(";"));
+  const keys = Object.keys(state.days).sort(), t = todayKey();
+  if (keys.length) C.dayRows(state.days, S, keys[0], keys[keys.length - 1] > t ? keys[keys.length - 1] : t, t).forEach(r => {
+    rows.push([dateDE(r.key), DOW[C.D(r.key).getUTCDay()], C.isoWeek(r.key), r.holiday ? `Feiertag (${r.holiday})` : TYPES[r.type],
+      r.start, r.end, r.pause ?? "", (r.net / 60).toFixed(2).replace(".", ",")].join(";"));
   });
   // BOM + semicolons + decimal comma so German Excel opens it correctly.
   download(`zeiten_${todayKey()}.csv`, "﻿" + rows.join("\r\n"), "text/csv;charset=utf-8");

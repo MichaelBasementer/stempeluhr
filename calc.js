@@ -1,6 +1,9 @@
 // Pure calculation rules. No DOM, no storage — tested by tests.html and test-calc.js.
 (function (root) {
-  const DEFAULTS = { weeklyH: 32, coveredPct: 10, offDayH: 8 };
+  const DEFAULTS = { weeklyH: 32, coveredPct: 10, offDayH: 8, bundesland: "HE" };
+  const LANDS = { BW: "Baden-Württemberg", BY: "Bayern", BE: "Berlin", BB: "Brandenburg", HB: "Bremen", HH: "Hamburg",
+    HE: "Hessen", MV: "Mecklenburg-Vorpommern", NI: "Niedersachsen", NW: "Nordrhein-Westfalen", RP: "Rheinland-Pfalz",
+    SL: "Saarland", SN: "Sachsen", ST: "Sachsen-Anhalt", SH: "Schleswig-Holstein", TH: "Thüringen" };
 
   const toMin = t => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
 
@@ -60,13 +63,83 @@
     return Math.min(full, days * settings.offDayH * 60);
   }
 
+  // ---- public holidays (statewide ones only; moving dates follow from Easter) ----
+  function easter(year) { // anonymous Gregorian algorithm
+    const a = year % 19, b = Math.floor(year / 100), c = year % 100, d = Math.floor(b / 4), e = b % 4;
+    const g = Math.floor((8 * b + 13) / 25), h = (19 * a + b - d - g + 15) % 30;
+    const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7;
+    const m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const n = h + l - 7 * m + 114;
+    return `${year}-${String(Math.floor(n / 31)).padStart(2, "0")}-${String(n % 31 + 1).padStart(2, "0")}`;
+  }
+
+  const holidayCache = {};
+  function holidays(year, land) {
+    const id = year + land;
+    if (holidayCache[id]) return holidayCache[id];
+    const out = {}, os = easter(year);
+    const add = (k, name, short, only) => { if (!only || only.split(" ").includes(land)) out[k] = { name, short }; };
+    const fix = (mmdd, ...rest) => add(`${year}-${mmdd}`, ...rest);
+    fix("01-01", "Neujahr", "Neujahr");
+    fix("01-06", "Heilige Drei Könige", "3 Könige", "BW BY ST");
+    fix("03-08", "Internationaler Frauentag", "Frauent.", "BE MV");
+    add(addDays(os, -2), "Karfreitag", "Karfr.");
+    add(os, "Ostersonntag", "Ostern", "BB HE");
+    add(addDays(os, 1), "Ostermontag", "Osterm.");
+    fix("05-01", "Tag der Arbeit", "1. Mai");
+    add(addDays(os, 39), "Christi Himmelfahrt", "Himmelf.");
+    add(addDays(os, 49), "Pfingstsonntag", "Pfingst.", "BB HE");
+    add(addDays(os, 50), "Pfingstmontag", "Pfingstm.");
+    add(addDays(os, 60), "Fronleichnam", "Fronl.", "BW BY HE NW RP SL");
+    fix("08-15", "Mariä Himmelfahrt", "M. Himm.", "SL");
+    fix("09-20", "Weltkindertag", "Kindert.", "TH");
+    fix("10-03", "Tag der Deutschen Einheit", "Einheit");
+    fix("10-31", "Reformationstag", "Reform.", "BB HB HH MV NI SN ST SH TH");
+    fix("11-01", "Allerheiligen", "Allerh.", "BW BY NW RP SL");
+    let bb = `${year}-11-22`; // Buß- und Bettag: the Wednesday before 23 November
+    while (D(bb).getUTCDay() !== 3) bb = addDays(bb, -1);
+    add(bb, "Buß- und Bettag", "Bußtag", "SN");
+    fix("12-25", "1. Weihnachtstag", "1. Weihn.");
+    fix("12-26", "2. Weihnachtstag", "2. Weihn.");
+    return holidayCache[id] = out;
+  }
+  const holidayOn = (k, land) => holidays(+k.slice(0, 4), land)[k] || null;
+
+  const firstEntry = days => Object.keys(days).sort()[0] || null;
+  const isWeekday = k => { const w = D(k).getUTCDay(); return w >= 1 && w <= 5; };
+
+  // A Mo–Fr holiday counts from the day itself, and only from the first entry on.
+  function holidayCounts(k, settings, ctx) {
+    return !!holidayOn(k, settings.bundesland) && isWeekday(k) && !!ctx.firstKey && k >= ctx.firstKey && k <= ctx.todayKey;
+  }
+
+  // What a day counts. ctx = { firstKey, todayKey, now }. A counting holiday stays at one
+  // workday even with times entered.
+  function dayMinutes(k, day, settings, ctx) {
+    if (holidayCounts(k, settings, ctx)) return settings.offDayH * 60;
+    return netMinutes(day, settings, k === ctx.todayKey ? ctx.now : null);
+  }
+
   function weekIst(days, monday, settings, todayKey, nowHHMM) {
+    const ctx = { firstKey: firstEntry(days), todayKey, now: nowHHMM };
     let t = 0;
-    for (let i = 0; i < 7; i++) {
-      const k = addDays(monday, i);
-      t += netMinutes(days[k], settings, k === todayKey ? nowHHMM : null);
-    }
+    for (let i = 0; i < 7; i++) { const k = addDays(monday, i); t += dayMinutes(k, days[k], settings, ctx); }
     return t;
+  }
+
+  // One row per day in [from, to] for the CSV and the PDF, including automatic holidays.
+  function dayRows(days, settings, from, to, todayKey) {
+    const ctx = { firstKey: firstEntry(days), todayKey, now: null }, out = [];
+    for (let k = from; k <= to; k = addDays(k, 1)) {
+      const d = days[k], counts = holidayCounts(k, settings, ctx);
+      const worked = d && d.type === "arbeit" && d.end;
+      if (!counts && (!d || (d.type === "arbeit" && !d.end))) continue;
+      out.push({ key: k, type: counts ? "feiertag" : d.type, holiday: counts ? holidayOn(k, settings.bundesland).name : "",
+        start: worked ? d.start : "", end: worked ? d.end : "",
+        pause: worked ? effectivePause(toMin(d.end) - toMin(d.start), d.pause) : null,
+        net: dayMinutes(k, d, settings, ctx) });
+    }
+    return out;
   }
 
   // All weeks from the first entry up to the current one. The current week has delta null
@@ -86,7 +159,7 @@
 
   const balance = ws => ws.reduce((a, w) => a + (w.delta ?? 0), 0);
 
-  const api = { DEFAULTS, toMin, fmt, fmtSigned, legalPause, effectivePause, netMinutes, weekDelta,
+  const api = { DEFAULTS, LANDS, easter, holidays, holidayOn, holidayCounts, firstEntry, isWeekday, dayMinutes, dayRows, toMin, fmt, fmtSigned, legalPause, effectivePause, netMinutes, weekDelta,
     D, key, addDays, mondayOf, isoWeek, weekTarget, weekIst, weeks, balance };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.Calc = api;
