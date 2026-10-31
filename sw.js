@@ -1,9 +1,9 @@
 // Offline cache. Bump VERSION whenever app files change so phones pick up the update.
-const VERSION = "stempeluhr-v7";
+const VERSION = "stempeluhr-v8";
 const FILES = ["./", "index.html", "style.css", "calc.js", "app.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "lib/jspdf.umd.min.js"];
 
 self.addEventListener("install", e => {
-  e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES.map(f => new Request(f, { cache: "reload" })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", e => {
@@ -19,7 +19,8 @@ self.addEventListener("fetch", e => {
   const url = new URL(e.request.url);
   const cacheable = url.origin === location.origin || url.hostname.endsWith("fonts.googleapis.com") || url.hostname.endsWith("fonts.gstatic.com");
   if (!cacheable) return;
-  e.respondWith(fetch(e.request).then(res => {
+  // GitHub Pages lets browsers keep files for 10 minutes; no-cache asks the server every time.
+  e.respondWith(fetch(e.request, url.origin === location.origin ? { cache: "no-cache" } : {}).then(res => {
     if (res.ok || res.type === "opaque") { const copy = res.clone(); caches.open(VERSION).then(c => c.put(e.request, copy)); }
     return res;
   }).catch(() => caches.match(e.request, { ignoreSearch: true })));
