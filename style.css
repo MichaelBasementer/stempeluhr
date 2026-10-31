@@ -62,6 +62,7 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;font:500 15px var(--sans);padding:0}
 .cal button{position:relative}
 .cal .wmark{position:absolute;top:2px;right:4px;font-style:normal;font-size:11px;color:var(--off)}
+.cal button.planned{border:1px dashed var(--off)}
 .cal button.empty{visibility:hidden}
 .cal button.we{background:transparent;color:var(--muted)}
 .cal button.today{border-color:var(--accent)}
@@ -124,6 +125,9 @@ input{font:500 18px var(--mono);padding:12px;border-radius:12px;border:1px solid
 .actions .danger{color:var(--minus);flex:0 0 auto;padding-inline:18px}
 .set-row{align-items:center}
 .set-row input{width:96px;text-align:right}
+label.pick{flex-direction:row;align-items:center;gap:12px;font-size:16px;color:var(--ink);padding-block:10px;border-bottom:1px solid var(--line);cursor:pointer}
+label.pick:last-child{border-bottom:0}
+label.pick input{width:22px;height:22px;flex:0 0 auto}
 details.privacy{font-size:14px;color:var(--muted);line-height:1.5}
 details.privacy summary{cursor:pointer;font-weight:600;color:var(--ink);padding-block:4px}
 details.privacy p{margin:8px 0 0}

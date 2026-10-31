@@ -138,15 +138,37 @@
     return t;
   }
 
+  const isWorkday = (k, land) => isWeekday(k) && !holidayOn(k, land);
+  const isPlanned = d => !!d && d.type === "urlaub" && d.status === "geplant";
+
   // Vacation days of a year: only Mo–Fr that are no public holiday use up a day.
+  // Geplant counts as planned whatever the date; entries without a status are confirmed.
   function vacationSummary(days, year, settings, todayKey) {
     const total = settings.vacationDays + ((settings.vacationCarry || {})[year] || 0);
-    let used = 0, planned = 0;
+    let used = 0, confirmed = 0, planned = 0;
     for (const k of Object.keys(days)) {
-      if (days[k].type !== "urlaub" || !k.startsWith(year + "-") || !isWeekday(k) || holidayOn(k, settings.bundesland)) continue;
-      if (k <= todayKey) used++; else planned++;
+      if (days[k].type !== "urlaub" || !k.startsWith(year + "-") || !isWorkday(k, settings.bundesland)) continue;
+      if (isPlanned(days[k])) planned++; else if (k <= todayKey) used++; else confirmed++;
     }
-    return { total, used, planned, left: total - used - planned };
+    return { total, used, confirmed, planned, left: total - used - confirmed - planned };
+  }
+
+  // Workdays marked geplant, oldest first: what a Urlaubsantrag can contain.
+  const plannedVacation = (days, land) => Object.keys(days).sort().filter(k => isPlanned(days[k]) && isWorkday(k, land));
+
+  // Groups days into periods. Weekends and holidays in between do not split a period.
+  function vacationPeriods(keys, land) {
+    const out = [];
+    for (const k of [...keys].sort()) {
+      const cur = out[out.length - 1];
+      if (cur) {
+        let gap = addDays(cur.to, 1);
+        while (gap < k && !isWorkday(gap, land)) gap = addDays(gap, 1);
+        if (gap === k) { cur.to = k; cur.days++; continue; }
+      }
+      out.push({ from: k, to: k, days: 1 });
+    }
+    return out;
   }
 
   // ArbZG hints only: over 10 h in a day, under 11 h rest. Nothing is calculated from these.
@@ -174,7 +196,8 @@
         start: worked ? d.start : "", end: worked ? d.end : "",
         pause: worked ? effectivePause(toMin(d.end) - toMin(d.start), d.pause) : null,
         net: dayMinutes(k, d, settings, ctx),
-        abbau: !counts && d.type === "abbau" ? (d.hours ?? settings.offDayH) * 60 : 0 });
+        abbau: !counts && d.type === "abbau" ? (d.hours ?? settings.offDayH) * 60 : 0,
+        planned: !counts && isPlanned(d) });
     }
     return out;
   }
@@ -230,7 +253,7 @@
   }
 
   const api = { DEFAULTS, LANDS, easter, holidays, holidayOn, holidayCounts, firstEntry, isWeekday, dayMinutes, dayRows, toMin, fmt, fmtSigned, legalPause, effectivePause, netMinutes, weekDelta,
-    D, key, addDays, mondayOf, isoWeek, weekTarget, weekAbbau, vacationSummary, warnings, yearOverview, weekIst, weeks, balance, backupDue };
+    D, key, addDays, mondayOf, isoWeek, weekTarget, weekAbbau, vacationSummary, plannedVacation, vacationPeriods, isPlanned, warnings, yearOverview, weekIst, weeks, balance, backupDue };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.Calc = api;
 })(this);

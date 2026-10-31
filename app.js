@@ -136,9 +136,9 @@ function renderKalender() {
     month += net;
     let sub = "";
     if (hol) sub = hol.short;
-    else if (d) sub = d.type !== "arbeit" ? TYPES[d.type] : d.end ? C.fmt(net) : "offen";
+    else if (d) sub = C.isPlanned(d) ? "geplant" : d.type !== "arbeit" ? TYPES[d.type] : d.end ? C.fmt(net) : "offen";
     const warned = C.warnings(k, state.days, S, k === t ? nowHHMM() : null).length > 0;
-    cells += `<button data-day="${k}" class="${dow > 4 ? "we" : ""} ${k === t ? "today" : ""} ${hol || (d && d.type !== "arbeit") ? "off" : ""}" aria-label="${i}. ${MON[m]}${hol ? ", " + hol.name : ""}${warned ? ", Warnung" : ""}">${warned ? `<i class="wmark" aria-hidden="true">${WARN}</i>` : ""}<span>${i}</span><small>${sub || "&nbsp;"}</small></button>`;
+    cells += `<button data-day="${k}" class="${dow > 4 ? "we" : ""} ${k === t ? "today" : ""} ${hol || (d && d.type !== "arbeit") ? "off" : ""} ${!hol && C.isPlanned(d) ? "planned" : ""}" aria-label="${i}. ${MON[m]}${hol ? ", " + hol.name : ""}${warned ? ", Warnung" : ""}">${warned ? `<i class="wmark" aria-hidden="true">${WARN}</i>` : ""}<span>${i}</span><small>${sub || "&nbsp;"}</small></button>`;
   }
   el.innerHTML = `
     <div class="monthbar"><button class="icon-btn" id="prev" aria-label="Vorheriger Monat">‹</button><h2>${MON[m]} ${y}</h2><button class="icon-btn" id="next" aria-label="Nächster Monat">›</button></div>
@@ -146,8 +146,11 @@ function renderKalender() {
     <div class="legend"><span style="--c:var(--accent)">Heute</span><span style="--c:var(--off)">Urlaub/Krank/Feiertag = ${C.fmt(S.offDayH * 60)}</span></div>
     <div class="panel"><div class="row total"><span>Summe ${MON[m]}</span><span class="num">${C.fmt(month)}</span></div></div>
     <div class="actions"><button id="pdf">Stundennachweis als PDF</button></div>
+    ${C.plannedVacation(state.days, S.bundesland).length ? '<div class="actions"><button id="vacReq">Urlaubsantrag als PDF</button></div>' : ""}
     <p class="rule">Tippe auf einen Tag, um Zeiten einzutragen oder zu ändern.</p>`;
   document.getElementById("pdf").onclick = () => exportPdf(y, m);
+  const vr = document.getElementById("vacReq");
+  if (vr) vr.onclick = openVacationRequest;
   el.querySelectorAll("[data-day]").forEach(b => b.onclick = () => openDay(b.dataset.day));
   document.getElementById("prev").onclick = () => { viewMonth = m ? [y, m - 1] : [y - 1, 11]; renderKalender(); };
   document.getElementById("next").onclick = () => { viewMonth = m < 11 ? [y, m + 1] : [y + 1, 0]; renderKalender(); };
@@ -201,6 +204,7 @@ function yearHtml(cls) {
     <div class="panel">
       <div class="row"><span>Urlaub ${viewYear}</span><span class="num">${vac.total} Tage</span></div>
       <div class="row"><span>Genommen</span><span class="num">${vac.used}</span></div>
+      <div class="row"><span>Bestätigt</span><span class="num">${vac.confirmed}</span></div>
       <div class="row"><span>Geplant</span><span class="num">${vac.planned}</span></div>
       <div class="row total"><span>Übrig</span><span class="num">${vac.left}</span></div>
     </div>
@@ -320,12 +324,17 @@ function openDay(k) {
       <div class="result"><span>Arbeitszeit</span><b>${present > 0 ? C.fmt(present - pause) : "–"}</b></div>`
       : d.type === "abbau" ? `<div class="fields"><label class="full">Stunden abbauen<input id="f-hours" inputmode="decimal" value="${String(d.hours ?? S.offDayH).replace(".", ",")}"></label></div>
       <div class="result"><span>Geht vom Saldo ab</span><b>${hol && C.isWeekday(k) ? "0:00" : C.fmt(-(d.hours ?? S.offDayH) * 60)}</b></div>`
-      : `<div class="result"><span>Zählt als</span><b>${C.fmt(S.offDayH * 60)}</b></div>`}
+      : `${d.type === "urlaub" ? `<div class="seg two"><button data-st="geplant" aria-pressed="${d.status === "geplant"}">Geplant</button><button data-st="" aria-pressed="${d.status !== "geplant"}">Bestätigt</button></div>` : ""}
+      <div class="result"><span>Zählt als</span><b>${C.fmt(S.offDayH * 60)}</b></div>`}
       ${C.warnings(k, { ...state.days, [k]: d }, S).map(w => `<p class="holiday-note">${WARN} ${w}</p>`).join("")}
       ${error ? `<p class="error">${error}</p>` : ""}
       <div class="actions"><button class="danger" id="del">Löschen</button><button id="cancel">Abbrechen</button><button class="primary" id="save">Speichern</button></div>
     </div></div>`;
-    host.querySelectorAll("[data-t]").forEach(b => b.onclick = () => { d.type = b.dataset.t; error = ""; draw(); });
+    host.querySelectorAll("[data-t]").forEach(b => b.onclick = () => {
+      if (b.dataset.t === "urlaub" && d.type !== "urlaub") d.status = "geplant"; // new vacation starts as planned
+      d.type = b.dataset.t; error = ""; draw();
+    });
+    host.querySelectorAll("[data-st]").forEach(b => b.onclick = () => { d.status = b.dataset.st; draw(); });
     const s = document.getElementById("f-start"), e = document.getElementById("f-end"), p = document.getElementById("f-pause");
     if (s) {
       s.onchange = () => { d.start = s.value; error = ""; draw(); };
@@ -351,7 +360,8 @@ function openDay(k) {
       } else if (d.type === "abbau") {
         if (error) return draw();
         state.days[k] = { type: "abbau", hours: d.hours ?? S.offDayH };
-      } else state.days[k] = { type: d.type };
+      } else if (C.isPlanned(d)) state.days[k] = { type: "urlaub", status: "geplant" };
+      else state.days[k] = { type: d.type };
       save(); close(); renderAll();
     };
   };
@@ -429,7 +439,7 @@ function exportCsv() {
   const rows = ["Datum;Tag;KW;Art;Beginn;Ende;Pause (min);Netto (h)"];
   const keys = Object.keys(state.days).sort(), t = todayKey();
   if (keys.length) C.dayRows(state.days, S, keys[0], keys[keys.length - 1] > t ? keys[keys.length - 1] : t, t).forEach(r => {
-    rows.push([dateDE(r.key), DOW[C.D(r.key).getUTCDay()], C.isoWeek(r.key), r.holiday ? `Feiertag (${r.holiday})` : r.abbau ? `Abbau (${C.fmt(r.abbau)} h)` : TYPES[r.type],
+    rows.push([dateDE(r.key), DOW[C.D(r.key).getUTCDay()], C.isoWeek(r.key), r.holiday ? `Feiertag (${r.holiday})` : r.abbau ? `Abbau (${C.fmt(r.abbau)} h)` : r.planned ? "Urlaub (geplant)" : TYPES[r.type],
       r.start, r.end, r.pause ?? "", (r.net / 60).toFixed(2).replace(".", ",")].join(";"));
   });
   // BOM + semicolons + decimal comma so German Excel opens it correctly.
@@ -445,6 +455,70 @@ function loadJsPdf() {
     s.onerror = () => fail(new Error("PDF-Bibliothek nicht verfügbar. Öffne die App einmal mit Internet."));
     document.head.appendChild(s);
   });
+}
+
+// Choose which planned days go into the request. All are ticked at first.
+function openVacationRequest() {
+  const host = document.getElementById("sheetHost");
+  const days = C.plannedVacation(state.days, state.settings.bundesland), picked = new Set(days);
+  let error = "";
+  const close = () => { host.innerHTML = ""; };
+  const draw = () => {
+    host.innerHTML = `<div class="scrim" id="scrim"><div class="sheet" role="dialog" aria-label="Urlaubsantrag">
+      <h3>Urlaubsantrag</h3>
+      <p class="rule">Wähle die Tage für den Antrag. Alles andere füllst du auf dem Dokument selbst aus.</p>
+      <div class="panel">${days.map(k => `<label class="pick"><input type="checkbox" data-k="${k}" ${picked.has(k) ? "checked" : ""}><span>${DOW[C.D(k).getUTCDay()]}, ${dateDE(k)}</span></label>`).join("")}</div>
+      ${error ? `<p class="error">${error}</p>` : ""}
+      <div class="actions"><button id="vr-cancel">Abbrechen</button><button class="primary" id="vr-make">PDF erstellen (${picked.size})</button></div>
+    </div></div>`;
+    host.querySelectorAll("[data-k]").forEach(c => c.onchange = () => { if (c.checked) picked.add(c.dataset.k); else picked.delete(c.dataset.k); error = ""; draw(); });
+    document.getElementById("vr-cancel").onclick = close;
+    document.getElementById("scrim").onclick = ev => { if (ev.target.id === "scrim") close(); };
+    document.getElementById("vr-make").onclick = () => {
+      if (!picked.size) { error = "Bitte mindestens einen Tag auswählen."; return draw(); }
+      exportVacationRequest([...picked]); close();
+    };
+  };
+  draw();
+}
+
+// A blank form: only the chosen days are filled in, nothing else leaves the app's data.
+async function exportVacationRequest(keys) {
+  try { await loadJsPdf(); } catch (e) { return toast(e.message); }
+  const doc = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
+  const periods = C.vacationPeriods(keys, state.settings.bundesland), L = 20, R = 190;
+  const n = d => d === 1 ? "1 Arbeitstag" : `${d} Arbeitstage`;
+  const blank = (label, x, yy, to) => { doc.text(label, x, yy); doc.setLineWidth(0.2).line(x + doc.getTextWidth(label) + 2, yy + 0.8, to, yy + 0.8); };
+  const sign = (yy, label) => {
+    doc.setLineWidth(0.2).line(L, yy, 80, yy).line(95, yy, R, yy);
+    doc.setFontSize(9).text("Datum", L, yy + 4.5).text(label, 95, yy + 4.5).setFontSize(11);
+  };
+  doc.setFont("helvetica", "bold").setFontSize(18).text("Urlaubsantrag", L, 28);
+  doc.setFont("helvetica", "normal").setFontSize(11);
+  blank("Name:", L, 46, 105); blank("Abteilung:", 112, 46, R);
+  doc.text("Hiermit beantrage ich Urlaub für:", L, 62);
+  let py = 72;
+  for (const p of periods) {
+    if (py > 215) { doc.addPage(); py = 25; }
+    doc.text(p.from === p.to ? dateDE(p.from) : `${dateDE(p.from)} - ${dateDE(p.to)}`, L + 4, py);
+    doc.text(n(p.days), R, py, { align: "right" });
+    py += 7;
+  }
+  doc.setLineWidth(0.3).line(L, py - 3.5, R, py - 3.5);
+  py += 3;
+  doc.setFont("helvetica", "bold").text("Gesamt", L + 4, py);
+  doc.text(n(keys.length), R, py, { align: "right" });
+  doc.setFont("helvetica", "normal");
+  py += 16;
+  blank("Vertretung:", L, py, R);
+  py += 24;
+  sign(py, "Unterschrift");
+  py += 22;
+  doc.setLineWidth(0.3).rect(L, py - 3.5, 4, 4).rect(62, py - 3.5, 4, 4);
+  doc.text("genehmigt", L + 7, py); doc.text("abgelehnt", 69, py);
+  py += 22;
+  sign(py, "Vorgesetzte/r");
+  await savePdf(`urlaubsantrag_${todayKey()}.pdf`, doc.output("blob"));
 }
 
 async function exportPdf(y, m) {
@@ -469,7 +543,7 @@ async function exportPdf(y, m) {
   let py = head(32);
   for (const r of rows) {
     if (py > 270) { doc.addPage(); py = head(20); }
-    const art = r.holiday || (r.abbau ? `Abbau (-${C.fmt(r.abbau)} h)` : TYPES[r.type]);
+    const art = r.holiday || (r.abbau ? `Abbau (-${C.fmt(r.abbau)} h)` : r.planned ? "Urlaub (geplant)" : TYPES[r.type]);
     doc.text(`${DOW[C.D(r.key).getUTCDay()]} ${dateDE(r.key).slice(0, 6)}`, X.date, py);
     doc.text(txt(art), X.art, py); doc.text(r.start, X.start, py); doc.text(r.end, X.end, py);
     doc.text(r.pause === null ? "" : `${r.pause} min`, X.pause, py);

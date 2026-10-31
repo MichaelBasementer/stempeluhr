@@ -100,7 +100,7 @@ cases.push(["Abbau-Zeile hat 0 h netto, 8 h Abbau", JSON.stringify((({ net, abba
 const vS = { ...S, vacationDays: 28, vacationCarry: { 2026: 3 } };
 const vDays = { "2026-08-03": { type: "urlaub" }, "2026-08-04": { type: "urlaub" }, "2026-11-30": { type: "urlaub" },
   "2026-12-12": { type: "urlaub" }, "2026-12-25": { type: "urlaub" }, "2025-08-04": { type: "urlaub" }, "2026-08-05": W("07:30", "16:00") };
-cases.push(["Urlaubskonto 2026", JSON.stringify(C.vacationSummary(vDays, 2026, vS, "2026-10-31")), '{"total":31,"used":2,"planned":1,"left":28}']);
+cases.push(["Urlaubskonto 2026", JSON.stringify(C.vacationSummary(vDays, 2026, vS, "2026-10-31")), '{"total":31,"used":2,"confirmed":1,"planned":0,"left":28}']);
 cases.push(["Urlaubskonto 2027 ohne Rest", C.vacationSummary(vDays, 2027, vS, "2026-10-31").total, 28]);
 
 // Working-time warnings: Di 11:00 netto, Mi nur 9 h Ruhe nach 20:00 Ende.
@@ -122,6 +122,17 @@ cases.push(["Jahr: Saldo Oktober = Gesamtsaldo", yr[9].balance, C.balance(C.week
 cases.push(["Jahr: August noch nicht aktiv", yr[7].active, false]);
 cases.push(["Jahr: November noch nicht aktiv", yr[10].active, false]);
 cases.push(["Folgejahr startet mit Vorjahressaldo", C.yearOverview(yDays, yCorr, S, 2027, "2027-01-10", "12:00")[0].active, true]);
+
+// Vacation status: 03.08.2027 is a Tuesday. 06.–09.08. spans a weekend, 24./27.12.2027 Christmas + weekend.
+const pDays = { "2026-11-02": { type: "urlaub", status: "geplant" }, "2026-11-03": { type: "urlaub" }, "2026-10-05": { type: "urlaub", status: "geplant" },
+  "2026-11-07": { type: "urlaub", status: "geplant" }, "2026-12-25": { type: "urlaub", status: "geplant" } };
+cases.push(["Urlaubskonto mit Status", JSON.stringify(C.vacationSummary(pDays, 2026, vS, "2026-10-31")), '{"total":31,"used":0,"confirmed":1,"planned":2,"left":28}']);
+cases.push(["Geplant zählt 8 h wie bisher", C.netMinutes({ type: "urlaub", status: "geplant" }, S), 480]);
+cases.push(["Antrag: nur Arbeitstage", C.plannedVacation(pDays, "HE").join(), "2026-10-05,2026-11-02"]);
+const per = C.vacationPeriods(["2027-08-03", "2027-08-04", "2027-08-06", "2027-08-09", "2027-08-11"], "HE");
+cases.push(["Antrag: Zeiträume über Wochenende", per.map(p => p.from + "/" + p.to + "/" + p.days).join(), "2027-08-03/2027-08-04/2,2027-08-06/2027-08-09/2,2027-08-11/2027-08-11/1"]);
+cases.push(["Antrag: Feiertage trennen nicht", C.vacationPeriods(["2026-12-24", "2026-12-28"], "HE").length, 1]);
+cases.push(["Geplant in CSV-Zeile markiert", C.dayRows(pDays, S, "2026-11-02", "2026-11-02", "2026-10-31")[0].planned, true]);
 
 let failed = 0;
 const lines = cases.map(([name, got, want]) => {
