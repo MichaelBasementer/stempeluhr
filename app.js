@@ -391,6 +391,7 @@ function openSettings() {
       <p>Deine Zeiten, Urlaubstage und Einstellungen werden nur in diesem Browser auf deinem Gerät gespeichert. Sie werden nicht übertragen. Es gibt kein Konto, keine Werbung und kein Tracking.</p>
       <p>Die App wird über GitHub Pages (GitHub Inc., USA) bereitgestellt. Beim Laden verarbeitet GitHub technisch bedingt deine IP-Adresse.</p>
       <p>CSV, Backup und PDF sind unverschlüsselte Dateien und enthalten deine Zeiten, teils auch Krankheitstage. Gib sie nur gezielt weiter.</p>
+      <p><a href="https://kellerer-engineering.de/impressum.html">Impressum</a></p>
     </details>
     <div class="actions"><button id="close">Schließen</button></div>
   </div></div>`;
