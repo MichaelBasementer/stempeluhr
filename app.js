@@ -518,7 +518,7 @@ async function savePdf(name, blob) {
     catch (e) { toast(e.name === "AbortError" ? "Abgebrochen, keine PDF gespeichert." : "PDF konnte nicht weitergegeben werden: " + e.message); }
     return;
   }
-  download(name, new Blob([blob], { type: "application/octet-stream" }));
+  download(name, new Blob([blob], { type: "application/x-download" }));
 }
 
 function download(name, data, type) {
