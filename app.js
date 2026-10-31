@@ -487,8 +487,9 @@ async function exportPdf(y, m) {
   await savePdf(`stundennachweis_${y}-${pad(m + 1)}.pdf`, doc.output("blob"));
 }
 
-// A PDF download inside the installed app ends on a blank page, so on phones it goes through
-// the share sheet. CSV and backup are plain text files and download normally.
+// With its real type a PDF opens a viewer inside the installed app and ends on a blank page.
+// Phones that can share use the share sheet; the rest (Firefox) download it as a generic file.
+// CSV and backup are plain text files and download normally.
 async function savePdf(name, blob) {
   const file = new File([blob], name, { type: "application/pdf" });
   const phone = matchMedia("(pointer: coarse)").matches;
@@ -497,9 +498,7 @@ async function savePdf(name, blob) {
     catch (e) { toast(e.name === "AbortError" ? "Abgebrochen, keine PDF gespeichert." : "PDF konnte nicht weitergegeben werden: " + e.message); }
     return;
   }
-  if (phone && matchMedia("(display-mode: standalone)").matches)
-    return toast("Dieses Handy kann die PDF nicht weitergeben. Öffne die Seite im Browser und versuche es dort.");
-  download(name, blob);
+  download(name, new Blob([blob], { type: "application/octet-stream" }));
 }
 
 function download(name, data, type) {
@@ -522,6 +521,7 @@ function go(tab) {
   document.querySelectorAll("section[data-tab]").forEach(s => s.hidden = s.dataset.tab !== tab);
   document.querySelectorAll("[data-go]").forEach(b => b.setAttribute("aria-selected", b.dataset.go === tab));
   document.getElementById("hdr").textContent = TITLES[tab];
+  if (tab === "kalender") loadJsPdf().catch(() => {}); // ready before the tap, so the download stays tied to it
 }
 function renderAll() {
   const t = todayKey(), d = C.D(t);
