@@ -1,3 +1,6 @@
+/* Fonts ship with the app, so opening it makes no connection to a font service */
+@font-face{font-family:"Instrument Sans";font-weight:400 700;font-display:swap;src:url(fonts/instrument-sans.woff2) format("woff2")}
+@font-face{font-family:"Azeret Mono";font-weight:400 600;font-display:swap;src:url(fonts/azeret-mono.woff2) format("woff2")}
 /* Layout: one phone-width column, header + tab body + fixed bottom tab bar */
 :root{
   --bg:#EEF1F4; --surface:#FFFFFF; --ink:#16202B; --muted:#5E6B78; --line:#D7DDE3;
@@ -121,6 +124,9 @@ input{font:500 18px var(--mono);padding:12px;border-radius:12px;border:1px solid
 .actions .danger{color:var(--minus);flex:0 0 auto;padding-inline:18px}
 .set-row{align-items:center}
 .set-row input{width:96px;text-align:right}
+details.privacy{font-size:14px;color:var(--muted);line-height:1.5}
+details.privacy summary{cursor:pointer;font-weight:600;color:var(--ink);padding-block:4px}
+details.privacy p{margin:8px 0 0}
 select{font:500 15px var(--sans);padding:10px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink);min-width:0;max-width:200px}
 .holiday-note{margin:0;color:var(--off);font-size:14px;font-weight:600}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(92px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;z-index:30;max-width:calc(100% - 32px)}

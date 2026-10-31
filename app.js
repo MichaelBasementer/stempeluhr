@@ -376,7 +376,12 @@ function openSettings() {
     </div>
     <div class="actions"><button class="primary" id="csv">CSV exportieren</button></div>
     <div class="actions"><button id="backup">Backup speichern</button><button id="restore">Backup laden</button></div>
-    <p class="rule">Deine Daten liegen nur auf diesem Handy. Speichere ab und zu ein Backup, denn wenn Chrome seine Daten löscht, sind die Zeiten weg.</p>
+    <p class="rule">Deine Daten liegen nur auf diesem Handy. Speichere ab und zu ein Backup, denn wenn der Browser seine Daten löscht, sind die Zeiten weg.</p>
+    <details class="privacy"><summary>Datenschutz</summary>
+      <p>Deine Zeiten, Urlaubstage und Einstellungen werden nur in diesem Browser auf deinem Gerät gespeichert. Sie werden nicht übertragen. Es gibt kein Konto, keine Werbung und kein Tracking.</p>
+      <p>Die App wird über GitHub Pages (GitHub Inc., USA) bereitgestellt. Beim Laden verarbeitet GitHub technisch bedingt deine IP-Adresse.</p>
+      <p>CSV, Backup und PDF sind unverschlüsselte Dateien und enthalten deine Zeiten, teils auch Krankheitstage. Gib sie nur gezielt weiter.</p>
+    </details>
     <div class="actions"><button id="close">Schließen</button></div>
   </div></div>`;
   ["weeklyH", "coveredPct", "offDayH", "vacationDays"].forEach(f => {
