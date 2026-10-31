@@ -442,11 +442,31 @@ function loadJsPdf() {
   });
 }
 
+// Firefox's PDF viewer stays black inside the home-screen app and the app cannot skip it.
+// Normal Firefox shares the same data and its viewer works, so the PDF is made there.
+function handOffToFirefox(y, m) {
+  if (!/Android.*Firefox/.test(navigator.userAgent) || !matchMedia("(display-mode: standalone)").matches) return false;
+  const url = `${location.origin}${location.pathname}#pdf-${y}-${pad(m + 1)}`;
+  location.href = `fenix://open?url=${encodeURIComponent(url)}`;
+  return true;
+}
+
+// Arriving from the hand-off: show the right month and say what to tap.
+function openFromHash() {
+  const h = location.hash.match(/^#pdf-(\d{4})-(\d{2})$/);
+  if (!h) return;
+  viewMonth = [+h[1], +h[2] - 1];
+  go("kalender"); renderKalender();
+  history.replaceState(null, "", location.pathname);
+  toast("Tippe auf „Stundennachweis als PDF“ und dann oben auf Download.", 6000);
+}
+
 async function exportPdf(y, m) {
   const S = state.settings, t = todayKey();
   const from = `${y}-${pad(m + 1)}-01`, to = `${y}-${pad(m + 1)}-${pad(new Date(y, m + 1, 0).getDate())}`;
   const rows = C.dayRows(state.days, S, from, to, t);
   if (!rows.length) return toast("Für diesen Monat gibt es keine Einträge.");
+  if (handOffToFirefox(y, m)) return;
   try { await loadJsPdf(); } catch (e) { return toast(e.message); }
   const sum = C.yearOverview(state.days, state.corrections, S, y, t, nowHHMM())[m];
   const doc = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
@@ -509,9 +529,9 @@ function download(name, data, type) {
   toast(name + " gespeichert");
 }
 
-function toast(t) {
+function toast(t, ms = 2400) {
   const e = document.createElement("div"); e.className = "toast"; e.textContent = t;
-  document.body.appendChild(e); setTimeout(() => e.remove(), 2400);
+  document.body.appendChild(e); setTimeout(() => e.remove(), ms);
 }
 
 // ---------- tabs + lifecycle ----------
@@ -536,6 +556,8 @@ const canRefresh = () => !document.getElementById("sheetHost").innerHTML && Date
 setInterval(() => { if (canRefresh()) renderAll(); }, 20000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden && canRefresh()) renderAll(); });
 renderAll();
+openFromHash();
+addEventListener("hashchange", openFromHash);
 
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
 if ("serviceWorker" in navigator) {
