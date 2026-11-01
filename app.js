@@ -7,6 +7,26 @@ const DOW = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 const DOW_LONG = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
 const MON = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
 
+// ---------- home screen ----------
+// Only Chromium browsers offer a real install prompt; everywhere else the hint names the menu entry.
+let installPrompt = null;
+addEventListener("beforeinstallprompt", e => { e.preventDefault(); installPrompt = e; renderAll(); });
+addEventListener("appinstalled", () => { installPrompt = null; renderAll(); });
+
+const runsAsApp = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+
+function homeHint() {
+  if (runsAsApp() || !matchMedia("(pointer: coarse)").matches) return "";
+  const iphone = /iPhone|iPad/.test(navigator.userAgent);
+  const how = installPrompt
+    ? '<div class="warn"><span>Stempeluhr als App nutzen</span><button id="install">Zum Startbildschirm hinzufügen</button></div>'
+    : `<p class="rule">${iphone ? "Als App nutzen: „Teilen“, dann „Zum Home-Bildschirm“." : "Als App nutzen: im Browser-Menü „Zum Startbildschirm hinzufügen“ wählen."}</p>`;
+  const data = iphone
+    ? "Deine Daten liegen nur in diesem Browser auf diesem Gerät. Die App auf dem Home-Bildschirm hat einen eigenen Speicher, übertrage bisherige Zeiten per Backup."
+    : "Deine Daten liegen nur in diesem Browser auf diesem Gerät. Sie werden nicht übertragen.";
+  return `${how}<p class="rule">${data}</p>`;
+}
+
 // ---------- state ----------
 let state = load();
 // Older data and backups lack the newer fields, so every load goes through here.
@@ -78,7 +98,8 @@ function renderHeute() {
     <div class="week">
       <div class="lbl"><span>Diese Woche (KW ${C.isoWeek(t)})</span><span class="num">${C.fmt(wk)} / ${C.fmt(target)}</span></div>
       <div class="bar"><i style="width:${cap ? Math.min(100, wk / cap * 100) : 100}%"></i><b style="left:${cap ? target / cap * 100 : 0}%"></b></div>
-    </div>`;
+    </div>
+    ${homeHint()}`;
 
   const st = document.getElementById("stamp");
   if (st) st.onclick = () => {
@@ -97,6 +118,8 @@ function renderHeute() {
     inp.onblur = () => { pickerOpenUntil = 0; };
     inp.onchange = () => { pickerOpenUntil = 0; setTodayTime(row.dataset.time, inp.value); };
   });
+  const ins = document.getElementById("install");
+  if (ins) ins.onclick = async () => { installPrompt.prompt(); await installPrompt.userChoice; installPrompt = null; renderAll(); };
   const bn = document.getElementById("backupNow");
   if (bn) bn.onclick = () => { saveBackup(); renderAll(); };
   const u = document.getElementById("undo");
