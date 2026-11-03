@@ -27,6 +27,16 @@ function homeHint() {
   return `${how}<p class="rule">${data}</p>`;
 }
 
+// The app moved to its own address in 2026-11. The old GitHub Pages copy keeps working, because
+// only it can still export the times stored at that address; this banner leads the way over.
+const NEW_HOME = "https://stempeluhr.kellerer-engineering.de/";
+const onOldHome = location.hostname.endsWith("github.io");
+function movedHint() {
+  if (!onOldHome) return "";
+  return `<div class="warn"><span>Die Stempeluhr ist umgezogen. 1. Backup speichern. 2. Neue Adresse öffnen und dort unter Einstellungen „Backup laden“.</span><button id="moveBackup">Backup speichern</button></div>
+    <p class="rule">Neue Adresse: <a href="${NEW_HOME}">${NEW_HOME}</a></p>`;
+}
+
 // ---------- state ----------
 let state = load();
 // Older data and backups lack the newer fields, so every load goes through here.
@@ -83,6 +93,7 @@ function renderHeute() {
   else button = `<button class="big ${running ? "out" : ""}" id="stamp">${running ? "Auschecken" : "Einchecken"}</button>`;
 
   el.innerHTML = `
+    ${movedHint()}
     ${lost ? `<div class="warn"><span>${DOW[C.D(lost).getUTCDay()]}, ${dateDE(lost)}: nicht ausgecheckt</span><button data-open="${lost}">Ende nachtragen</button></div>` : ""}
     ${C.backupDue(state.lastBackup, ctx.firstKey, t) ? `<div class="warn"><span>${state.lastBackup ? "Dein letztes Backup ist über 7 Tage her." : "Du hast noch kein Backup gespeichert."}</span><button id="backupNow">Backup speichern</button></div>` : ""}
     ${C.warnings(t, state.days, S, now).map(w => `<div class="warn"><span>${WARN} ${w}</span></div>`).join("")}
@@ -122,6 +133,8 @@ function renderHeute() {
   if (ins) ins.onclick = async () => { installPrompt.prompt(); await installPrompt.userChoice; installPrompt = null; renderAll(); };
   const bn = document.getElementById("backupNow");
   if (bn) bn.onclick = () => { saveBackup(); renderAll(); };
+  const mb = document.getElementById("moveBackup");
+  if (mb) mb.onclick = () => { saveBackup(); toast("Backup gespeichert, jetzt die neue Adresse öffnen"); };
   const u = document.getElementById("undo");
   if (u) u.onclick = () => { state.days[todayKey()].end = null; save(); renderAll(); };
   el.querySelectorAll("[data-open]").forEach(b => b.onclick = () => openDay(b.dataset.open));
@@ -412,7 +425,9 @@ function openSettings() {
     <p class="rule">Deine Daten liegen nur auf diesem Handy. Speichere ab und zu ein Backup, denn wenn der Browser seine Daten löscht, sind die Zeiten weg.</p>
     <details class="privacy"><summary>Datenschutz</summary>
       <p>Deine Zeiten, Urlaubstage und Einstellungen werden nur in diesem Browser auf deinem Gerät gespeichert. Sie werden nicht übertragen. Es gibt kein Konto, keine Werbung und kein Tracking.</p>
-      <p>Die App wird über GitHub Pages (GitHub Inc., USA) bereitgestellt. Beim Laden verarbeitet GitHub technisch bedingt deine IP-Adresse.</p>
+      <p>${onOldHome
+        ? "Diese alte Adresse wird über GitHub Pages (GitHub Inc., USA) bereitgestellt. Beim Laden verarbeitet GitHub technisch bedingt deine IP-Adresse."
+        : "Die App liegt auf einem Server von Kellerer Engineering bei der netcup GmbH in Deutschland. Beim Laden wird technisch bedingt deine IP-Adresse verarbeitet. Zugriffe werden nicht protokolliert."}</p>
       <p>CSV, Backup und PDF sind unverschlüsselte Dateien und enthalten deine Zeiten, teils auch Krankheitstage. Gib sie nur gezielt weiter.</p>
       <p><a href="https://kellerer-engineering.de/impressum.html">Impressum</a></p>
     </details>
